@@ -1,0 +1,2874 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>C-Scratch — Visual C + Memory Safety</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,300;0,400;0,500;0,700;1,400&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet"/>
+<style>
+/* ============================================================
+   C BUILDER ENGINE — Core Styles
+   Language plugins can override via their own CSS
+   ============================================================ */
+
+
+:root{
+  --bg-deep:#0a0c10;--bg-panel:#0f1117;--bg-sidebar:#0d0f14;--bg-canvas:#080a0e;
+  --bg-block:#141820;--bg-block-h:#1a1f2e;--bg-code:#0c0e14;--bg-input:#0a0c12;
+  --border:rgba(255,255,255,0.06);--border-h:rgba(255,255,255,0.14);--border-focus:rgba(255,255,255,0.28);
+  --text-primary:#e8eaf0;--text-secondary:#8892a4;--text-dim:#4a5568;--text-code:#c9d1e9;
+  --c-types:#4a9eff;--c-structs:#a855f7;--c-funcs:#22c55e;--c-control:#f59e0b;
+  --c-memory:#ef4444;--c-preproc:#06b6d4;--c-io:#84cc16;--c-ops:#f97316;
+  --accent:#4a9eff;--radius:8px;--radius-lg:12px;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow:hidden}
+body{font-family:'Syne',sans-serif;background:var(--bg-deep);color:var(--text-primary);font-size:14px;-webkit-font-smoothing:antialiased}
+#app{display:flex;flex-direction:column;height:100vh;overflow:hidden}
+
+/* HEADER */
+#header{height:50px;background:var(--bg-panel);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 14px;gap:10px;flex-shrink:0;z-index:100}
+.logo{font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:700;color:var(--c-types);display:flex;align-items:center;gap:8px}
+.logo em{color:var(--text-secondary);font-style:normal;font-weight:400;font-size:11px}
+#header-actions{margin-left:auto;display:flex;align-items:center;gap:6px}
+
+/* WORKSPACE */
+#workspace{display:flex;flex:1;overflow:hidden}
+
+/* SIDEBAR */
+#sidebar{width:272px;background:var(--bg-sidebar);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;flex-shrink:0;z-index:50}
+#sidebar-search{padding:8px 10px;border-bottom:1px solid var(--border);flex-shrink:0}
+.search-wrap{position:relative}
+.search-icon{position:absolute;left:8px;top:50%;transform:translateY(-50%);color:var(--text-dim);font-size:12px;pointer-events:none}
+#search-input{width:100%;background:var(--bg-input);border:1px solid var(--border);border-radius:6px;color:var(--text-primary);font-family:'JetBrains Mono',monospace;font-size:11px;padding:5px 8px 5px 26px;outline:none;transition:border-color .15s}
+#search-input:focus{border-color:var(--border-focus)}
+#sidebar-content{flex:1;overflow-y:auto;padding:6px 0;scrollbar-width:thin;scrollbar-color:var(--border) transparent}
+.category{margin-bottom:2px}
+.cat-header{display:flex;align-items:center;gap:7px;padding:5px 10px;cursor:pointer;user-select:none;transition:background .15s}
+.cat-header:hover{background:rgba(255,255,255,0.03)}
+.cat-icon{width:18px;height:18px;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:10px;flex-shrink:0;font-family:'JetBrains Mono',monospace;font-weight:700}
+.cat-label{font-size:9.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--text-secondary);flex:1}
+.cat-count{font-size:9px;font-family:'JetBrains Mono',monospace;color:var(--text-dim);background:rgba(255,255,255,0.05);padding:1px 5px;border-radius:10px}
+.cat-chev{font-size:8px;color:var(--text-dim);transition:transform .15s}
+.category.collapsed .cat-chev{transform:rotate(-90deg)}
+.category-blocks{padding:2px 6px 4px;display:flex;flex-direction:column;gap:2px}
+.category.collapsed .category-blocks{display:none}
+.block-item{background:var(--bg-block);border:1px solid var(--border);border-radius:5px;padding:6px 9px 6px 11px;cursor:grab;transition:all .15s;position:relative;overflow:hidden}
+.block-item::before{content:'';position:absolute;left:0;top:0;bottom:0;width:2px}
+.block-item:hover{background:var(--bg-block-h);border-color:var(--border-h);transform:translateX(2px)}
+.block-item:active{cursor:grabbing}
+.bin{font-family:'JetBrains Mono',monospace;font-size:11.5px;font-weight:500;color:var(--text-primary);display:block}
+.bip{font-family:'JetBrains Mono',monospace;font-size:9.5px;color:var(--text-dim);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.block-item.is-container .bin::after{content:' ⊞';font-size:9px;color:var(--text-dim)}
+
+/* CANVAS WRAP */
+#canvas-wrap{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0;position:relative}
+#tabs-bar{display:flex;align-items:center;background:var(--bg-panel);border-bottom:1px solid var(--border);padding:0 6px;gap:2px;flex-shrink:0;overflow-x:auto;scrollbar-width:none}
+#tabs-bar::-webkit-scrollbar{display:none}
+.tab{display:flex;align-items:center;gap:6px;padding:7px 11px;border-radius:5px 5px 0 0;cursor:pointer;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text-secondary);border:1px solid transparent;border-bottom:none;white-space:nowrap;transition:all .15s;position:relative;bottom:-1px}
+.tab:hover{color:var(--text-primary)}
+.tab.active{background:var(--bg-canvas);border-color:var(--border);border-bottom-color:var(--bg-canvas);color:var(--text-primary)}
+.tab-x{width:14px;height:14px;border-radius:3px;display:flex;align-items:center;justify-content:center;font-size:10px;opacity:0;transition:opacity .15s;cursor:pointer}
+.tab:hover .tab-x{opacity:.6}
+.tab-x:hover{opacity:1!important;background:rgba(255,255,255,0.1)}
+.tab-add{margin-left:4px;width:24px;height:24px;border-radius:5px;border:1px dashed var(--border);background:transparent;color:var(--text-dim);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:14px;transition:all .15s;flex-shrink:0}
+.tab-add:hover{border-color:var(--border-h);color:var(--text-primary)}
+
+/* CANVAS — infinite pan+zoom viewport */
+#canvas{flex:1;position:relative;overflow:hidden;background:var(--bg-canvas);cursor:default;
+  background-image:radial-gradient(circle at 15% 15%,rgba(74,158,255,.03) 0%,transparent 55%),
+  linear-gradient(rgba(255,255,255,.013) 1px,transparent 1px),
+  linear-gradient(90deg,rgba(255,255,255,.013) 1px,transparent 1px);
+  background-size:auto,24px 24px,24px 24px}
+#canvas.panning{cursor:grabbing}
+
+/* The infinite world (transformed) */
+#world{position:absolute;top:0;left:0;transform-origin:0 0;will-change:transform}
+
+#canvas-empty{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;pointer-events:none;z-index:1}
+#canvas-empty.hidden{display:none}
+.empty-icon{font-size:44px;opacity:.12;font-family:'JetBrains Mono',monospace}
+.empty-text{font-size:13px;color:var(--text-dim);text-align:center;line-height:1.8}
+.empty-hint{font-size:10px;color:var(--text-dim);font-family:'JetBrains Mono',monospace;opacity:.7;text-align:center}
+
+/* SNAP GUIDE LINE */
+#snap-guide{position:absolute;left:0;right:0;height:2px;background:var(--accent);box-shadow:0 0 8px var(--accent);opacity:0;pointer-events:none;z-index:999;transition:opacity .1s;border-radius:1px}
+#snap-guide.visible{opacity:1}
+
+/* ZOOM CONTROLS */
+#zoom-controls{position:absolute;bottom:16px;right:16px;display:flex;align-items:center;gap:6px;z-index:200;background:var(--bg-panel);border:1px solid var(--border);border-radius:8px;padding:5px 8px}
+.zoom-btn{width:24px;height:24px;border-radius:5px;border:none;background:transparent;color:var(--text-secondary);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:14px;transition:all .15s;font-weight:700}
+.zoom-btn:hover{background:rgba(255,255,255,.08);color:var(--text-primary)}
+#zoom-label{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text-secondary);min-width:40px;text-align:center;cursor:pointer;user-select:none}
+#zoom-label:hover{color:var(--text-primary)}
+
+/* PAN HINT */
+#pan-hint{position:absolute;bottom:52px;right:16px;font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--text-dim);z-index:200;text-align:right;pointer-events:none}
+
+/* CANVAS BLOCKS — scratch style with notch connectors */
+.canvas-block{
+  position:absolute;
+  width:280px;
+  background:var(--bg-block);
+  border:1px solid var(--border);
+  border-radius:var(--radius-lg);
+  box-shadow:0 4px 24px rgba(0,0,0,.5),0 1px 0 rgba(255,255,255,.04) inset;
+  cursor:move;user-select:none;
+  transition:box-shadow .15s,border-color .15s,transform .08s;
+  z-index:10;
+}
+.canvas-block:hover{border-color:var(--border-h);box-shadow:0 8px 40px rgba(0,0,0,.7);z-index:20}
+.canvas-block.selected{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent),0 8px 40px rgba(0,0,0,.7);z-index:30}
+.canvas-block.dragging{opacity:.85;z-index:100;cursor:grabbing;transform:rotate(1.5deg) scale(1.02);transition:none}
+.canvas-block.snapping{transition:top .12s cubic-bezier(0.34,1.56,0.64,1),left .12s cubic-bezier(0.34,1.56,0.64,1)}
+
+/* Scratch-style notch at top and bottom */
+.canvas-block::before{
+  content:'';position:absolute;left:20px;top:-6px;
+  width:30px;height:6px;
+  background:var(--bg-block);
+  border-left:1px solid var(--border);border-right:1px solid var(--border);border-top:1px solid var(--border);
+  border-radius:4px 4px 0 0;
+  z-index:2
+}
+.canvas-block::after{
+  content:'';position:absolute;left:20px;bottom:-6px;
+  width:30px;height:6px;
+  background:var(--bg-block);
+  border-left:1px solid var(--border);border-right:1px solid var(--border);border-bottom:1px solid var(--border);
+  border-radius:0 0 4px 4px;
+  z-index:2
+}
+.canvas-block.first-block::before{opacity:0}
+
+/* ORDER BADGE */
+.order-badge{
+  position:absolute;top:-9px;left:-9px;
+  width:20px;height:20px;border-radius:50%;
+  background:var(--bg-panel);border:1px solid var(--border-h);
+  font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:700;
+  color:var(--text-dim);display:flex;align-items:center;justify-content:center;z-index:5
+}
+
+/* BLOCK HEADER */
+.bhead{display:flex;align-items:center;gap:7px;padding:9px 11px 7px;border-bottom:1px solid var(--border);border-radius:var(--radius-lg) var(--radius-lg) 0 0}
+.bdot{width:9px;height:9px;border-radius:50%;flex-shrink:0}
+.btitle{font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;flex:1}
+.bactions{display:flex;gap:2px;opacity:0;transition:opacity .15s}
+.canvas-block:hover .bactions{opacity:1}
+.bbtn{width:20px;height:20px;border-radius:4px;border:none;background:transparent;color:var(--text-dim);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:11px;transition:all .15s}
+.bbtn:hover{background:rgba(255,255,255,.08);color:var(--text-primary)}
+.bbtn.del:hover{background:rgba(239,68,68,.15);color:#ef4444}
+
+/* BLOCK BODY */
+.bbody{padding:9px 11px 10px}
+.bcode{font-family:'JetBrains Mono',monospace;font-size:11px;line-height:1.7;color:var(--text-code);white-space:pre;overflow-x:auto;margin-top:6px;scrollbar-width:thin}
+.bfields{display:flex;flex-direction:column;gap:4px}
+.bfield{display:flex;align-items:center;gap:6px}
+.bfield label{font-size:9px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--text-dim);min-width:52px;flex-shrink:0}
+.bfield input{flex:1;background:var(--bg-input);border:1px solid var(--border);border-radius:4px;color:var(--text-primary);font-family:'JetBrains Mono',monospace;font-size:10px;padding:3px 6px;outline:none;transition:border-color .15s;min-width:0}
+.bfield input:focus{border-color:var(--border-focus)}
+
+/* CONTAINER ZONE */
+.canvas-block.is-container .block-children{
+  min-height:32px;margin:4px 8px 8px;
+  border:1px dashed rgba(255,255,255,0.07);border-radius:6px;
+  padding:4px;display:flex;flex-direction:column;gap:3px;
+  transition:border-color .15s,background .15s
+}
+.canvas-block.is-container .block-children.drop-target{border-color:var(--accent);background:rgba(74,158,255,.05)}
+.container-label{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--text-dim);padding:2px 8px 0;letter-spacing:.05em}
+
+/* CHILD BLOCKS */
+.child-block{background:var(--bg-block-h);border:1px solid var(--border);border-radius:6px;padding:6px 8px;position:relative;transition:border-color .15s}
+.child-block:hover{border-color:var(--border-h)}
+.child-block-header{display:flex;align-items:center;gap:6px;margin-bottom:4px}
+.child-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.child-name{font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;flex:1;color:var(--text-secondary)}
+.child-actions{display:flex;gap:2px;opacity:0;transition:opacity .15s}
+.child-block:hover .child-actions{opacity:1}
+.child-btn{width:18px;height:18px;border-radius:3px;border:none;background:transparent;color:var(--text-dim);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:10px;transition:all .15s;padding:0}
+.child-btn:hover{background:rgba(255,255,255,.1);color:var(--text-primary)}
+.child-btn.eject:hover{background:rgba(250,204,21,.15);color:#facc15}
+.child-btn.rem:hover{background:rgba(239,68,68,.15);color:#ef4444}
+.child-fields{display:flex;flex-direction:column;gap:3px;margin-bottom:4px}
+.child-field{display:flex;align-items:center;gap:5px}
+.child-field label{font-size:8.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--text-dim);min-width:48px;flex-shrink:0}
+.child-field input{flex:1;background:var(--bg-input);border:1px solid var(--border);border-radius:3px;color:var(--text-primary);font-family:'JetBrains Mono',monospace;font-size:10px;padding:2px 5px;outline:none;transition:border-color .15s;min-width:0}
+.child-field input:focus{border-color:var(--border-focus)}
+.child-code{font-family:'JetBrains Mono',monospace;font-size:10px;line-height:1.6;color:var(--text-dim);white-space:pre;overflow-x:auto}
+
+/* CODE PANEL */
+#code-panel{width:360px;background:var(--bg-code);border-left:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;overflow:hidden}
+#code-panel-header{height:50px;border-bottom:1px solid var(--border);padding:0 14px;display:flex;align-items:center;gap:10px;flex-shrink:0}
+.cp-title{font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:500;color:var(--text-secondary)}
+.cp-filename{color:var(--text-primary);font-weight:700}
+.cp-badge{margin-left:auto;font-size:9px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--c-funcs);background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.2);padding:2px 7px;border-radius:10px}
+#code-output{flex:1;overflow-y:auto;padding:14px;scrollbar-width:thin;scrollbar-color:var(--border) transparent}
+#code-content{font-family:'JetBrains Mono',monospace;font-size:11.5px;line-height:1.85;color:var(--text-dim);white-space:pre;min-height:100%}
+#code-content.has-code{color:var(--text-code)}
+#code-panel-footer{border-top:1px solid var(--border);padding:8px 12px;display:flex;gap:7px;flex-shrink:0}
+
+/* SYNTAX HIGHLIGHT */
+.ck{color:#ff7eb6}.ct{color:#79c0ff}.cf{color:#d2a8ff}.cs{color:#a5d6ff}
+.cn{color:#ffa657}.cc{color:#485872;font-style:italic}.cp{color:#56d364}.cm{color:#ffa657}
+
+/* BUTTONS */
+.btn{display:inline-flex;align-items:center;gap:5px;padding:5px 11px;border-radius:6px;border:1px solid var(--border);background:var(--bg-block);color:var(--text-primary);font-family:'Syne',sans-serif;font-size:12px;font-weight:600;cursor:pointer;transition:all .15s;white-space:nowrap}
+.btn:hover{background:var(--bg-block-h);border-color:var(--border-h)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.primary:hover{filter:brightness(1.15)}
+.btn.danger{color:#ef4444}.btn.danger:hover{background:rgba(239,68,68,.1);border-color:rgba(239,68,68,.3)}
+
+/* RESIZER */
+.resizer{width:3px;background:var(--border);cursor:col-resize;flex-shrink:0;transition:background .15s}
+.resizer:hover{background:var(--accent)}
+
+/* TOAST */
+#toast-container{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);z-index:9999;display:flex;flex-direction:column;gap:5px;pointer-events:none}
+.toast{background:var(--bg-block);border:1px solid var(--border-h);border-radius:7px;padding:7px 13px;font-size:12px;color:var(--text-primary);box-shadow:0 8px 40px rgba(0,0,0,.7);animation:tIn .2s ease,tOut .3s ease 1.7s forwards;display:flex;align-items:center;gap:7px}
+.toast.success{border-color:rgba(34,197,94,.3)}.toast.error{border-color:rgba(239,68,68,.3)}.toast.warn{border-color:rgba(245,158,11,.3)}
+@keyframes tIn{from{opacity:0;transform:translateY(8px)}}
+@keyframes tOut{to{opacity:0;transform:translateY(-6px)}}
+@keyframes blockDrop{from{opacity:0;transform:scale(.9) translateY(-10px)}to{opacity:1;transform:scale(1) translateY(0)}}
+.canvas-block{animation:blockDrop .2s cubic-bezier(0.34,1.56,0.64,1)}
+.canvas-block.dragging{animation:none}
+.canvas-block.snap-target{border-color:var(--accent)!important;box-shadow:0 0 0 2px var(--accent),0 0 20px rgba(74,158,255,.3)!important}
+#drag-ghost{position:fixed;pointer-events:none;z-index:9999;opacity:.85;display:none}
+
+/* FILE TREE */
+#filetree{width:200px;background:#090b0f;border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;flex-shrink:0;z-index:50}
+#filetree-header{height:50px;border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 10px;gap:8px;flex-shrink:0}
+#filetree-title{font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--text-dim);flex:1}
+.ft-btn{width:22px;height:22px;border-radius:4px;border:none;background:transparent;color:var(--text-dim);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:13px;transition:all .15s}
+.ft-btn:hover{background:rgba(255,255,255,.08);color:var(--text-primary)}
+#filetree-list{flex:1;overflow-y:auto;padding:4px 0}
+.ft-item{display:flex;align-items:center;gap:7px;padding:5px 10px;cursor:pointer;transition:background .15s;position:relative;border-radius:0}
+.ft-item:hover{background:rgba(255,255,255,.04)}
+.ft-item.active{background:rgba(74,158,255,.1);color:var(--accent)}
+.ft-item.active .ft-name{color:var(--accent)}
+.ft-icon{font-size:12px;flex-shrink:0;font-family:'JetBrains Mono',monospace}
+.ft-name{font-family:'JetBrains Mono',monospace;font-size:11px;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text-secondary)}
+.ft-item.active .ft-name{color:var(--c-types)}
+.ft-actions{display:flex;gap:1px;opacity:0;transition:opacity .15s}
+.ft-item:hover .ft-actions{opacity:1}
+.ft-action{width:16px;height:16px;border-radius:3px;border:none;background:transparent;color:var(--text-dim);cursor:pointer;font-size:9px;display:flex;align-items:center;justify-content:center;transition:all .15s}
+.ft-action:hover{background:rgba(255,255,255,.1);color:var(--text-primary)}
+.ft-action.del:hover{background:rgba(239,68,68,.15);color:#ef4444}
+.ft-rename-input{background:var(--bg-input);border:1px solid var(--border-focus);border-radius:3px;color:var(--text-primary);font-family:'JetBrains Mono',monospace;font-size:11px;padding:1px 4px;width:100%;outline:none}
+.ft-section{font-size:8.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--text-dim);padding:8px 10px 3px;margin-top:2px}
+.ft-resizer{width:3px;background:var(--border);cursor:col-resize;flex-shrink:0;transition:background .15s}
+.ft-resizer:hover{background:var(--accent)}
+
+/* BLOCK ERROR BADGE */
+.canvas-block.has-error .bhead{background:rgba(239,68,68,.06)}
+.block-error-badge{
+  position:absolute;top:-8px;right:8px;
+  background:#ef4444;color:#fff;
+  font-size:9px;font-weight:700;
+  padding:1px 6px;border-radius:8px;
+  font-family:'JetBrains Mono',monospace;
+  display:none;z-index:10;cursor:help;
+  white-space:nowrap;max-width:200px;overflow:hidden;text-overflow:ellipsis
+}
+.canvas-block.has-error .block-error-badge{display:block}
+.canvas-block.has-warning .block-error-badge{display:block;background:var(--c-control)}
+
+/* .H FILE indicator */
+.tab.filetype-h .tab-dot{background:var(--c-structs)}
+.tab.filetype-c .tab-dot{background:var(--c-types)}
+.tab.filetype-mk .tab-dot{background:var(--c-io)}
+.tab-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0;margin-right:2px}
+*{scrollbar-width:thin;scrollbar-color:var(--border) transparent}
+
+/* ============================================================
+   C-SCRATCH — Plugin Styles
+   Memory analysis badges, panel, error states, hover links
+   ============================================================ */
+
+/* ── Canvas block analysis states ─────────────────────────────*/
+.canvas-block.cs-error {
+  border-color: #ef4444 !important;
+  box-shadow: 0 0 0 1px #ef4444, 0 0 16px rgba(239,68,68,.25) !important;
+  animation: cs-pulse-err 2s ease infinite;
+}
+.canvas-block.cs-warning {
+  border-color: #f59e0b !important;
+  box-shadow: 0 0 0 1px #f59e0b, 0 0 12px rgba(245,158,11,.2) !important;
+}
+.canvas-block.cs-safe {
+  border-color: rgba(34,197,94,.4) !important;
+}
+.canvas-block.cs-linked {
+  border-color: #22c55e !important;
+  box-shadow: 0 0 0 2px #22c55e, 0 0 20px rgba(34,197,94,.3) !important;
+}
+.canvas-block.cs-highlight-pulse {
+  animation: cs-highlight 0.4s ease 3;
+}
+
+@keyframes cs-pulse-err {
+  0%,100% { box-shadow: 0 0 0 1px #ef4444, 0 0 8px rgba(239,68,68,.2); }
+  50%     { box-shadow: 0 0 0 2px #ef4444, 0 0 20px rgba(239,68,68,.4); }
+}
+@keyframes cs-highlight {
+  0%,100% { transform: scale(1); }
+  50%     { transform: scale(1.03); }
+}
+
+/* ── Analysis badge on block ───────────────────────────────────*/
+.cs-analysis-badge {
+  position: absolute;
+  bottom: -8px;
+  left: 12px;
+  right: 12px;
+  background: rgba(239,68,68,.92);
+  color: #fff;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 0 0 6px 6px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: help;
+  z-index: 5;
+  letter-spacing: .02em;
+}
+.canvas-block.cs-warning .cs-analysis-badge {
+  background: rgba(245,158,11,.92);
+}
+.canvas-block.cs-safe .cs-analysis-badge {
+  display: none;
+}
+
+/* ── Memory Inspector Panel ────────────────────────────────────*/
+#cs-memory-panel {
+  width: 280px;
+  background: #090b0f;
+  border-left: 1px solid rgba(255,255,255,.06);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  flex-shrink: 0;
+  font-family: 'JetBrains Mono', monospace;
+  transition: width .2s ease;
+}
+#cs-memory-panel.collapsed {
+  width: 36px;
+  overflow: hidden;
+}
+#cs-memory-panel.collapsed #cs-mem-body,
+#cs-memory-panel.collapsed #cs-mem-footer,
+#cs-memory-panel.collapsed #cs-mem-summary {
+  display: none;
+}
+#cs-memory-panel.collapsed #cs-mem-title { display: none; }
+#cs-memory-panel.collapsed #cs-mem-close {
+  writing-mode: vertical-rl;
+  font-size: 10px;
+  padding: 12px 0;
+  color: #ef4444;
+}
+
+#cs-mem-header {
+  height: 50px;
+  border-bottom: 1px solid rgba(255,255,255,.06);
+  padding: 0 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+#cs-mem-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: #e8eaf0;
+  flex: 1;
+}
+#cs-mem-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+#cs-mem-close {
+  width: 22px; height: 22px;
+  border-radius: 4px; border: none;
+  background: transparent; color: #4a5568;
+  cursor: pointer; font-size: 11px;
+  display: flex; align-items: center; justify-content: center;
+  transition: all .15s; flex-shrink: 0;
+}
+#cs-mem-close:hover { background: rgba(255,255,255,.08); color: #e8eaf0; }
+
+#cs-mem-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,.06) transparent;
+}
+
+.cs-mem-empty {
+  color: #4a5568;
+  font-size: 11px;
+  text-align: center;
+  padding: 24px 12px;
+  line-height: 1.7;
+}
+
+/* Allocation row */
+.cs-alloc-row {
+  border: 1px solid rgba(255,255,255,.06);
+  border-radius: 8px;
+  margin-bottom: 6px;
+  padding: 8px 10px;
+  cursor: pointer;
+  transition: all .15s;
+  overflow: hidden;
+}
+.cs-alloc-row:hover {
+  border-color: rgba(255,255,255,.14);
+  background: rgba(255,255,255,.02);
+}
+.cs-status-leak  { border-left: 3px solid #ef4444 !important; }
+.cs-status-uaf   { border-left: 3px solid #ef4444 !important; background: rgba(239,68,68,.04); }
+.cs-status-warn  { border-left: 3px solid #f59e0b !important; }
+.cs-status-safe  { border-left: 3px solid #22c55e !important; }
+
+.cs-alloc-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+.cs-alloc-id {
+  font-size: 9px;
+  font-weight: 700;
+  color: #4a5568;
+  background: rgba(255,255,255,.04);
+  padding: 1px 5px;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+.cs-alloc-var  { font-size: 11px; font-weight: 700; color: #e8eaf0; flex: 1; }
+.cs-alloc-type { font-size: 10px; color: #79c0ff; flex-shrink: 0; }
+.cs-alloc-status {
+  font-size: 9px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 8px;
+  flex-shrink: 0;
+  letter-spacing: .04em;
+}
+.cs-status-safe  .cs-alloc-status { background: rgba(34,197,94,.12);  color: #22c55e; }
+.cs-status-leak  .cs-alloc-status { background: rgba(239,68,68,.12);  color: #ef4444; }
+.cs-status-uaf   .cs-alloc-status { background: rgba(239,68,68,.12);  color: #ef4444; }
+.cs-status-warn  .cs-alloc-status { background: rgba(245,158,11,.12); color: #f59e0b; }
+
+.cs-alloc-details  { padding-left: 4px; }
+.cs-alloc-line     { font-size: 10px; color: #4a5568; line-height: 1.8; }
+.cs-line-ok        { color: #22c55e; }
+.cs-line-err       { color: #ef4444; }
+.cs-line-warn      { color: #f59e0b; }
+
+/* Footer issues */
+#cs-mem-footer {
+  border-top: 1px solid rgba(255,255,255,.06);
+  padding: 8px;
+  max-height: 180px;
+  overflow-y: auto;
+  flex-shrink: 0;
+}
+.cs-issues-title {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: #4a5568;
+  padding: 2px 4px 6px;
+}
+.cs-issue-item {
+  font-size: 10px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  margin-bottom: 2px;
+  cursor: pointer;
+  line-height: 1.5;
+  transition: background .12s;
+}
+.cs-issue-item:hover { background: rgba(255,255,255,.04); }
+.cs-issue-err  { color: #ef4444; border-left: 2px solid #ef4444; padding-left: 6px; }
+.cs-issue-warn { color: #f59e0b; border-left: 2px solid #f59e0b; padding-left: 6px; }
+
+/* Summary chips */
+.cs-chip {
+  font-size: 9px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 8px;
+  white-space: nowrap;
+}
+.cs-chip-ok   { background: rgba(34,197,94,.12);  color: #22c55e; border: 1px solid rgba(34,197,94,.2); }
+.cs-chip-err  { background: rgba(239,68,68,.12);  color: #ef4444; border: 1px solid rgba(239,68,68,.2); }
+.cs-chip-warn { background: rgba(245,158,11,.12); color: #f59e0b; border: 1px solid rgba(245,158,11,.2); }
+
+/* ── malloc/free alloc-id in code ──────────────────────────────*/
+.cs-alloc-ref { color: #4a5568; font-style: italic; }
+
+/* ── Toggle button in header ───────────────────────────────────*/
+#btn-mem-panel {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(239,68,68,.3);
+  background: rgba(239,68,68,.08);
+  color: #ef4444;
+  font-family: 'Syne', sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all .15s;
+  white-space: nowrap;
+}
+#btn-mem-panel:hover {
+  background: rgba(239,68,68,.15);
+  border-color: rgba(239,68,68,.5);
+}
+#btn-mem-panel.active {
+  background: rgba(239,68,68,.2);
+  border-color: #ef4444;
+}
+
+/* C-Scratch overrides */
+:root { --cs-red:#ef4444; --cs-green:#22c55e; }
+#code-panel { width: 320px; }
+.cs-logo-tag {
+  font-size:9px; background:rgba(239,68,68,.15); color:#ef4444;
+  border:1px solid rgba(239,68,68,.3); border-radius:4px;
+  padding:1px 6px; font-weight:700; letter-spacing:.06em;
+  margin-left:6px; font-family:'JetBrains Mono',monospace;
+}
+</style>
+</head>
+<body>
+<div id="app">
+<header id="header">
+  <div class="logo">
+    C-Scratch
+    <span class="cs-logo-tag">MEMORY SAFE</span>
+    <span style="font-size:9px;color:var(--text-dim);margin-left:8px;font-family:'Syne',sans-serif;font-weight:400">Visual C + Analyse Rust-style</span>
+  </div>
+  <div style="display:flex;align-items:center;gap:6px;margin-left:14px">
+    <div style="width:7px;height:7px;border-radius:50%;background:#ef4444;box-shadow:0 0 6px #ef4444"></div>
+    <span style="font-size:10px;color:var(--text-dim);font-family:'JetBrains Mono',monospace">C99/C11 · Rust Analysis</span>
+  </div>
+  <div style="margin-left:12px;font-size:10px;color:var(--text-dim);font-family:'JetBrains Mono',monospace">
+    Clic droit = pan · Molette = zoom · ⚡ = bloc analysé
+  </div>
+  <div id="header-actions">
+    <button class="btn" id="btn-save-json" title="Sauvegarder">💾 sauver</button>
+    <button class="btn" id="btn-load-json" title="Ouvrir">📂 ouvrir</button>
+    <input type="file" id="input-load-json" accept=".json" style="display:none"/>
+    <button class="btn" id="btn-example">⊕ exemple</button>
+    <button class="btn danger" id="btn-clear">✕ vider</button>
+    <button class="btn primary" id="btn-copy">⧉ copier</button>
+  </div>
+</header>
+<div id="workspace">
+  <div id="filetree">
+    <div id="filetree-header">
+      <span id="filetree-title">Projet C</span>
+      <button class="ft-btn" id="ft-new-c" title="Nouveau .c">+C</button>
+      <button class="ft-btn" id="ft-new-h" title="Nouveau .h">+H</button>
+      <button class="ft-btn" id="ft-new-mk" title="Makefile">+M</button>
+    </div>
+    <div id="filetree-list"></div>
+  </div>
+  <div class="ft-resizer" id="resizer-ft"></div>
+  <aside id="sidebar">
+    <div id="sidebar-search">
+      <div class="search-wrap">
+        <span class="search-icon">⌕</span>
+        <input type="text" id="search-input" placeholder="Rechercher..." spellcheck="false" autocomplete="off"/>
+      </div>
+    </div>
+    <div id="sidebar-content"></div>
+  </aside>
+  <div class="resizer" id="resizer-left"></div>
+  <div id="canvas-wrap">
+    <div id="tabs-bar"></div>
+    <div id="canvas">
+      <div id="world"></div>
+      <div id="snap-guide"></div>
+      <div id="canvas-empty">
+        <div class="empty-icon" style="color:#ef4444">{ }</div>
+        <div class="empty-text">C-Scratch — Visual C avec analyse mémoire<br>Glissez des blocs, les ⚡ sont analysés en temps réel</div>
+        <div class="empty-hint">malloc⚡ · free⚡ · NULL check⚡ · Fuites · Double-free · Use-after-free</div>
+      </div>
+      <div id="zoom-controls">
+        <button class="zoom-btn" id="btn-zoom-out">−</button>
+        <span id="zoom-label">100%</span>
+        <button class="zoom-btn" id="btn-zoom-in">+</button>
+        <button class="zoom-btn" id="btn-zoom-reset">⊙</button>
+      </div>
+      <div id="pan-hint">Clic droit + drag pour naviguer</div>
+    </div>
+  </div>
+  <div class="resizer" id="resizer-right"></div>
+  <aside id="code-panel">
+    <div id="code-panel-header">
+      <span class="cp-title"><span class="cp-filename" id="code-filename">main.c</span></span>
+      <span class="cp-badge" style="color:#ef4444;border-color:rgba(239,68,68,.3);background:rgba(239,68,68,.1)">C pur</span>
+    </div>
+    <div id="code-output"><pre id="code-content"></pre></div>
+    <div id="code-panel-footer">
+      <button class="btn" id="btn-copy-footer" style="flex:1;justify-content:center">⧉ Copier</button>
+      <button class="btn" id="btn-download" style="flex:1;justify-content:center">↓ .c</button>
+    </div>
+  </aside>
+</div>
+</div>
+<div id="drag-ghost"></div>
+<div id="toast-container"></div>
+<script>
+// ============================================================
+//  C BUILDER — Plugin API
+// ============================================================
+
+var _plugins = {};
+
+function registerLanguage(plugin) {
+  if (!plugin.id) throw new Error('Plugin must have an id');
+  _plugins[plugin.id] = plugin;
+  Object.keys(plugin.fileTypes || {}).forEach(function(ext) {
+    _plugins['__ext__' + ext] = plugin.id;
+  });
+  console.log('[PluginAPI] Registered: ' + plugin.name + ' (' + plugin.id + ')');
+}
+
+function getPlugin(extKey) {
+  var pluginId = _plugins['__ext__' + extKey];
+  if (pluginId && _plugins[pluginId]) return _plugins[pluginId];
+  var keys = Object.keys(_plugins).filter(function(k) { return k.indexOf('__ext__') !== 0; });
+  return keys.length ? _plugins[keys[0]] : null;
+}
+
+function getAllPlugins() {
+  return Object.keys(_plugins)
+    .filter(function(k) { return k.indexOf('__ext__') !== 0; })
+    .map(function(k) { return _plugins[k]; });
+}
+
+function getFileType(name) {
+  if (!name) return 'c';
+  if (name === 'Makefile' || name.endsWith('.mk')) return 'mk';
+  var m = name.match(/\.(\w+)$/);
+  return m ? m[1] : 'c';
+}
+
+function getBlocksForFile(filename) {
+  var ext = getFileType(filename);
+  var plugin = getPlugin(ext);
+  if (!plugin) return {};
+  var ft = plugin.fileTypes[ext];
+  return ft ? (ft.blocks || {}) : {};
+}
+
+function getHighlighter(filename) {
+  var ext = getFileType(filename);
+  var plugin = getPlugin(ext);
+  return plugin ? plugin.highlight : function(code) { return escH(code); };
+}
+
+function getValidator(filename) {
+  var ext = getFileType(filename);
+  var plugin = getPlugin(ext);
+  return (plugin && plugin.validate) ? plugin.validate : null;
+}
+
+
+// ============================================================
+//  C-SCRATCH — Visual C with Memory Safety Analysis
+//  Plugin for C-Builder engine
+//  
+//  Vision: Pure C output + Rust-style static analysis overlay
+//  ============================================================
+
+// ── Allocation tracker (shared state) ────────────────────────
+var CS_allocs = {};      // id → {blockId, varName, type, size, freed, freeBlockId}
+var CS_allocCounter = 0;
+
+function csNextAllocId() {
+  CS_allocCounter++;
+  return 'alloc_' + String(CS_allocCounter).padStart(3, '0');
+}
+
+function csResetAllocs() {
+  CS_allocs = {};
+  CS_allocCounter = 0;
+}
+
+// ── Block definitions ─────────────────────────────────────────
+var CS_BLOCKS = {
+
+  // ── VARIABLES & TYPES ──────────────────────────────────────
+  types: { label:"Types & Variables", color:"#4a9eff", icon:"T", blocks:[
+    {id:"cs_int",    name:"int",     preview:"int x = 0;",          tpl:"int {name} = {val};",          fields:[{id:"name",l:"Nom",d:"x"},{id:"val",l:"Valeur",d:"0"}]},
+    {id:"cs_float",  name:"float",   preview:"float f = 0.0f;",     tpl:"float {name} = {val}f;",        fields:[{id:"name",l:"Nom",d:"f"},{id:"val",l:"Valeur",d:"0.0"}]},
+    {id:"cs_double", name:"double",  preview:"double d = 0.0;",     tpl:"double {name} = {val};",        fields:[{id:"name",l:"Nom",d:"d"},{id:"val",l:"Valeur",d:"0.0"}]},
+    {id:"cs_char",   name:"char",    preview:"char c = 'a';",       tpl:"char {name} = '{val}';",        fields:[{id:"name",l:"Nom",d:"c"},{id:"val",l:"Char",d:"a"}]},
+    {id:"cs_str",    name:"char[]",  preview:"char s[64] = \"\";",  tpl:"char {name}[{sz}] = \"{val}\";",fields:[{id:"name",l:"Nom",d:"s"},{id:"sz",l:"Taille",d:"64"},{id:"val",l:"Valeur",d:""}]},
+    {id:"cs_ptr",    name:"pointeur *", preview:"int *ptr = NULL;", tpl:"{type} *{name} = NULL;",        fields:[{id:"type",l:"Type",d:"int"},{id:"name",l:"Nom",d:"ptr"}]},
+    {id:"cs_ptr2",   name:"double ** ", preview:"int **pp = NULL;", tpl:"{type} **{name} = NULL;",       fields:[{id:"type",l:"Type",d:"int"},{id:"name",l:"Nom",d:"pp"}]},
+    {id:"cs_const",  name:"const",   preview:"const int MAX = 100;",tpl:"const {type} {name} = {val};", fields:[{id:"type",l:"Type",d:"int"},{id:"name",l:"Nom",d:"MAX"},{id:"val",l:"Valeur",d:"100"}]},
+    {id:"cs_static", name:"static",  preview:"static int count = 0;",tpl:"static {type} {name} = {val};",fields:[{id:"type",l:"Type",d:"int"},{id:"name",l:"Nom",d:"count"},{id:"val",l:"Valeur",d:"0"}]},
+    {id:"cs_arr",    name:"tableau []",preview:"int arr[10];",      tpl:"{type} {name}[{sz}];",          fields:[{id:"type",l:"Type",d:"int"},{id:"name",l:"Nom",d:"arr"},{id:"sz",l:"Taille",d:"10"}]},
+    {id:"cs_arr2d",  name:"tableau 2D",preview:"int m[4][4];",      tpl:"{type} {name}[{r}][{c}];",     fields:[{id:"type",l:"Type",d:"int"},{id:"name",l:"Nom",d:"mat"},{id:"r",l:"Lignes",d:"4"},{id:"c",l:"Cols",d:"4"}]},
+    {id:"cs_sizeof", name:"sizeof",  preview:"sizeof(int)",         tpl:"sizeof({type})",                fields:[{id:"type",l:"Type",d:"int"}]},
+    {id:"cs_cast",   name:"cast",    preview:"(float)x",            tpl:"({type}){expr}",                fields:[{id:"type",l:"Type",d:"float"},{id:"expr",l:"Expr",d:"x"}]},
+  ]},
+
+  // ── STRUCTS ─────────────────────────────────────────────────
+  structs: { label:"Structs & Unions", color:"#a855f7", icon:"S", blocks:[
+    {id:"cs_struct",       name:"struct",          preview:"struct Point { ... };",      tpl:"struct {name} {\n    {t1} {f1};\n    {t2} {f2};\n};",           fields:[{id:"name",l:"Nom",d:"Point"},{id:"t1",l:"Type 1",d:"int"},{id:"f1",l:"Champ 1",d:"x"},{id:"t2",l:"Type 2",d:"int"},{id:"f2",l:"Champ 2",d:"y"}]},
+    {id:"cs_typedef_s",    name:"typedef struct",  preview:"typedef struct { } Name;",  tpl:"typedef struct {\n    {t1} {f1};\n    {t2} {f2};\n} {name};",   fields:[{id:"name",l:"Typedef",d:"Point"},{id:"t1",l:"Type 1",d:"int"},{id:"f1",l:"Champ 1",d:"x"},{id:"t2",l:"Type 2",d:"int"},{id:"f2",l:"Champ 2",d:"y"}]},
+    {id:"cs_union",        name:"union",           preview:"union Data { int i; float f; };", tpl:"union {name} {\n    {t1} {f1};\n    {t2} {f2};\n};",      fields:[{id:"name",l:"Nom",d:"Data"},{id:"t1",l:"Type 1",d:"int"},{id:"f1",l:"Champ 1",d:"i"},{id:"t2",l:"Type 2",d:"float"},{id:"f2",l:"Champ 2",d:"f"}]},
+    {id:"cs_enum",         name:"enum",            preview:"enum Color { RED, GREEN };",  tpl:"enum {name} {\n    {v1},\n    {v2},\n    {v3}\n};",           fields:[{id:"name",l:"Nom",d:"Color"},{id:"v1",l:"Val 1",d:"RED"},{id:"v2",l:"Val 2",d:"GREEN"},{id:"v3",l:"Val 3",d:"BLUE"}]},
+    {id:"cs_dot",          name:"accès . struct",  preview:"s.field = 0;",              tpl:"{var}.{field} = {val};",                                         fields:[{id:"var",l:"Variable",d:"s"},{id:"field",l:"Champ",d:"x"},{id:"val",l:"Valeur",d:"0"}]},
+    {id:"cs_arrow",        name:"accès -> pointeur",preview:"p->field = 0;",            tpl:"{ptr}->{field} = {val};",                                        fields:[{id:"ptr",l:"Pointeur",d:"p"},{id:"field",l:"Champ",d:"x"},{id:"val",l:"Valeur",d:"0"}]},
+    {id:"cs_bitfield",     name:"bit fields",      preview:"unsigned int flag : 1;",    tpl:"struct {name} {\n    unsigned int {f1} : {b1};\n    unsigned int {f2} : {b2};\n};", fields:[{id:"name",l:"Struct",d:"Flags"},{id:"f1",l:"Champ 1",d:"active"},{id:"b1",l:"Bits 1",d:"1"},{id:"f2",l:"Champ 2",d:"mode"},{id:"b2",l:"Bits 2",d:"3"}]},
+  ]},
+
+  // ── MEMORY (avec tracking) ──────────────────────────────────
+  memory: { label:"Mémoire ⚡ (analysée)", color:"#ef4444", icon:"M", blocks:[
+    {
+      id:"cs_malloc", name:"malloc ⚡", preview:"T *p = malloc(n * sizeof(T));",
+      tpl:"{type} *{name} = ({type} *)malloc({n} * sizeof({type})); /* {_aid} */",
+      fields:[{id:"type",l:"Type",d:"int"},{id:"name",l:"Pointeur",d:"ptr"},{id:"n",l:"Nombre",d:"n"}],
+      _isMalloc: true,
+    },
+    {
+      id:"cs_calloc", name:"calloc ⚡", preview:"T *p = calloc(n, sizeof(T));",
+      tpl:"{type} *{name} = ({type} *)calloc({n}, sizeof({type})); /* {_aid} */",
+      fields:[{id:"type",l:"Type",d:"int"},{id:"name",l:"Pointeur",d:"ptr"},{id:"n",l:"Nombre",d:"n"}],
+      _isMalloc: true,
+    },
+    {
+      id:"cs_realloc", name:"realloc ⚡", preview:"p = realloc(p, n * sizeof(T));",
+      tpl:"{name} = ({type} *)realloc({name}, {n} * sizeof({type})); /* realloc {_aid} */",
+      fields:[{id:"type",l:"Type",d:"int"},{id:"name",l:"Pointeur",d:"ptr"},{id:"n",l:"Nouveau n",d:"new_n"}],
+      _isRealloc: true,
+    },
+    {
+      id:"cs_free", name:"free ⚡", preview:"free(ptr); ptr = NULL;",
+      tpl:"free({name}); /* free {_aid} */\n{name} = NULL;",
+      fields:[{id:"name",l:"Pointeur",d:"ptr"}],
+      _isFree: true,
+    },
+    {
+      id:"cs_null_check", name:"NULL check ⚡", preview:"if (ptr == NULL) { exit(1); }",
+      isContainer:true,
+      tpl:"if ({ptr} == NULL) {",tplClose:"}",
+      fields:[{id:"ptr",l:"Pointeur",d:"ptr"}],
+      _isNullCheck: true,
+    },
+    {id:"cs_memcpy", name:"memcpy",   preview:"memcpy(dst, src, n*sizeof(T));",tpl:"memcpy({dst}, {src}, {n} * sizeof({type}));",fields:[{id:"dst",l:"Dest",d:"dst"},{id:"src",l:"Src",d:"src"},{id:"n",l:"Nombre",d:"n"},{id:"type",l:"Type",d:"int"}]},
+    {id:"cs_memset", name:"memset",   preview:"memset(ptr, 0, n*sizeof(T));",  tpl:"memset({ptr}, {val}, {n} * sizeof({type}));",fields:[{id:"ptr",l:"Pointeur",d:"ptr"},{id:"val",l:"Valeur",d:"0"},{id:"n",l:"Nombre",d:"n"},{id:"type",l:"Type",d:"int"}]},
+    {id:"cs_memmove",name:"memmove",  preview:"memmove(dst, src, n);",         tpl:"memmove({dst}, {src}, {n});",fields:[{id:"dst",l:"Dest",d:"dst"},{id:"src",l:"Src",d:"src"},{id:"n",l:"Bytes",d:"n"}]},
+    {id:"cs_deref",  name:"déréf *",  preview:"*ptr = 42;",                    tpl:"*{ptr} = {val};",            fields:[{id:"ptr",l:"Pointeur",d:"ptr"},{id:"val",l:"Valeur",d:"42"}]},
+    {id:"cs_addr",   name:"adresse &",preview:"int *p = &x;",                  tpl:"{type} *{name} = &{var};",   fields:[{id:"type",l:"Type",d:"int"},{id:"name",l:"Pointeur",d:"p"},{id:"var",l:"Variable",d:"x"}]},
+  ]},
+
+  // ── CONTROL FLOW ────────────────────────────────────────────
+  control: { label:"Contrôle ⊞", color:"#f59e0b", icon:"⬦", blocks:[
+    {id:"cs_for",      name:"for (...)  { }",      preview:"for (int i=0; i<n; i++)", isContainer:true, tpl:"for ({type} {var} = {start}; {var} < {end}; {var}++) {",tplClose:"}", fields:[{id:"type",l:"Type",d:"int"},{id:"var",l:"Variable",d:"i"},{id:"start",l:"Début",d:"0"},{id:"end",l:"Fin",d:"n"}]},
+    {id:"cs_while",    name:"while (...)  { }",    preview:"while (cond) { ... }",    isContainer:true, tpl:"while ({cond}) {",tplClose:"}",               fields:[{id:"cond",l:"Condition",d:"!done"}]},
+    {id:"cs_do_while", name:"do { } while (...)",  preview:"do { } while (cond);",    isContainer:true, tpl:"do {",tplClose:"} while ({cond});",             fields:[{id:"cond",l:"Condition",d:"x > 0"}]},
+    {id:"cs_if",       name:"if (...)  { }",       preview:"if (cond) { ... }",       isContainer:true, tpl:"if ({cond}) {",tplClose:"}",                   fields:[{id:"cond",l:"Condition",d:"x > 0"}]},
+    {id:"cs_if_else",  name:"if / else",            preview:"if (cond) { } else { }",  isContainer:true, tpl:"if ({cond}) {",tplClose:"} else {\n    // ...\n}",fields:[{id:"cond",l:"Condition",d:"x > 0"}]},
+    {id:"cs_if_elif",  name:"if / else if / else", preview:"if ... else if ...",       isContainer:true, tpl:"if ({c1}) {",tplClose:"} else if ({c2}) {\n    // ...\n} else {\n    // ...\n}",fields:[{id:"c1",l:"Cond 1",d:"x > 0"},{id:"c2",l:"Cond 2",d:"x == 0"}]},
+    {id:"cs_switch",   name:"switch / case",        preview:"switch (x) { case ... }",  isContainer:true, tpl:"switch ({var}) {",tplClose:"}",               fields:[{id:"var",l:"Variable",d:"x"}]},
+    {id:"cs_case",     name:"case:",                preview:"case N: ... break;",       tpl:"    case {val}:\n        // action\n        break;",             fields:[{id:"val",l:"Valeur",d:"1"}]},
+    {id:"cs_default",  name:"default:",             preview:"default: ... break;",      tpl:"    default:\n        // action\n        break;",                fields:[]},
+    {id:"cs_return",   name:"return",               preview:"return val;",              tpl:"return {val};",                                                   fields:[{id:"val",l:"Valeur",d:"0"}]},
+    {id:"cs_break",    name:"break",                preview:"break;",                   tpl:"break;",                                                          fields:[]},
+    {id:"cs_continue", name:"continue",             preview:"continue;",                tpl:"continue;",                                                       fields:[]},
+    {id:"cs_goto",     name:"goto",                 preview:"goto label;",              tpl:"goto {label};",                                                   fields:[{id:"label",l:"Label",d:"end"}]},
+    {id:"cs_label",    name:"label:",               preview:"end:",                     tpl:"{label}:",                                                        fields:[{id:"label",l:"Label",d:"end"}]},
+  ]},
+
+  // ── FUNCTIONS ───────────────────────────────────────────────
+  functions: { label:"Fonctions", color:"#22c55e", icon:"ƒ", blocks:[
+    {id:"cs_func",      name:"fonction { }",    preview:"int fn(int a, int b) { }",   isContainer:true, tpl:"{ret} {name}({params}) {",tplClose:"}",fields:[{id:"ret",l:"Retour",d:"int"},{id:"name",l:"Nom",d:"process"},{id:"params",l:"Params",d:"int a, int b"}]},
+    {id:"cs_func_void", name:"void fn { }",     preview:"void fn(int x) { }",         isContainer:true, tpl:"void {name}({params}) {",tplClose:"}",  fields:[{id:"name",l:"Nom",d:"print_val"},{id:"params",l:"Params",d:"int x"}]},
+    {id:"cs_main",      name:"main { }",        preview:"int main(int argc, ...) { }",isContainer:true, tpl:"int main(int argc, char *argv[]) {",tplClose:"    return 0;\n}",fields:[]},
+    {id:"cs_proto",     name:"prototype",       preview:"int fn(int a, int b);",      tpl:"{ret} {name}({params});",fields:[{id:"ret",l:"Retour",d:"int"},{id:"name",l:"Nom",d:"fn"},{id:"params",l:"Params",d:"int a, int b"}]},
+    {id:"cs_func_ptr",  name:"pointeur fn",     preview:"int (*fp)(int, int);",       tpl:"{ret} (*{name})({params});",fields:[{id:"ret",l:"Retour",d:"int"},{id:"name",l:"Nom",d:"fp"},{id:"params",l:"Params",d:"int, int"}]},
+    {id:"cs_inline",    name:"static inline",   preview:"static inline int sq(x) { }",tpl:"static inline {ret} {name}({params}) {\n    return {body};\n}",fields:[{id:"ret",l:"Retour",d:"int"},{id:"name",l:"Nom",d:"sq"},{id:"params",l:"Params",d:"int x"},{id:"body",l:"Corps",d:"x * x"}]},
+    {id:"cs_recursive", name:"récursion",       preview:"int fact(int n) { ... }",    tpl:"{ret} {name}({ptype} {param}) {\n    if ({param} <= {base}) return {bval};\n    return {param} * {name}({param} - 1);\n}",fields:[{id:"ret",l:"Retour",d:"int"},{id:"name",l:"Nom",d:"fact"},{id:"ptype",l:"Type",d:"int"},{id:"param",l:"Param",d:"n"},{id:"base",l:"Base",d:"1"},{id:"bval",l:"Val base",d:"1"}]},
+    {id:"cs_call",      name:"appel fn",        preview:"result = fn(a, b);",         tpl:"{res} = {name}({args});",fields:[{id:"res",l:"Résultat",d:"result"},{id:"name",l:"Fonction",d:"fn"},{id:"args",l:"Arguments",d:"a, b"}]},
+    {id:"cs_variadic",  name:"variadic fn",     preview:"void fn(int n, ...)",        tpl:"#include <stdarg.h>\nvoid {name}(int {count}, ...) {\n    va_list args;\n    va_start(args, {count});\n    // va_arg(args, type)\n    va_end(args);\n}",fields:[{id:"name",l:"Nom",d:"print_n"},{id:"count",l:"Count param",d:"n"}]},
+  ]},
+
+  // ── PREPROCESSOR ────────────────────────────────────────────
+  preprocessor: { label:"Préprocesseur", color:"#06b6d4", icon:"#", blocks:[
+    {id:"cs_inc_sys",  name:"#include <...>",   preview:"#include <stdio.h>",          tpl:"#include <{h}>",         fields:[{id:"h",l:"Header",d:"stdio.h"}]},
+    {id:"cs_inc_loc",  name:'#include "..."',   preview:'#include "myfile.h"',         tpl:'#include "{h}"',         fields:[{id:"h",l:"Fichier",d:"myfile.h"}]},
+    {id:"cs_define",   name:"#define const",    preview:"#define MAX 100",             tpl:"#define {name} {val}",   fields:[{id:"name",l:"Nom",d:"MAX"},{id:"val",l:"Valeur",d:"100"}]},
+    {id:"cs_macro",    name:"#define macro",    preview:"#define MAX(a,b) ...",        tpl:"#define {name}({p1},{p2}) (({p1})>({p2})?({p1}):({p2}))", fields:[{id:"name",l:"Nom",d:"MAX"},{id:"p1",l:"Param 1",d:"a"},{id:"p2",l:"Param 2",d:"b"}]},
+    {id:"cs_ifdef",    name:"#ifdef / #endif",  preview:"#ifdef DEBUG ... #endif",     tpl:"#ifdef {macro}\n    // actif\n#else\n    // sinon\n#endif",fields:[{id:"macro",l:"Macro",d:"DEBUG"}]},
+    {id:"cs_ifndef",   name:"#ifndef guard",    preview:"#ifndef X_H ... #endif",      tpl:"#ifndef {guard}\n#define {guard}\n\n// contenu\n\n#endif /* {guard} */",fields:[{id:"guard",l:"Guard",d:"MYHEADER_H"}]},
+    {id:"cs_pragma",   name:"#pragma once",     preview:"#pragma once  (fichier .h)",  tpl:"#pragma once",           fields:[]},
+    {id:"cs_undef",    name:"#undef",           preview:"#undef MACRO",               tpl:"#undef {name}",          fields:[{id:"name",l:"Nom",d:"MACRO"}]},
+    {id:"cs_error_pp", name:"#error",           preview:'#error "message"',           tpl:'#error "{msg}"',         fields:[{id:"msg",l:"Message",d:"Unsupported platform"}]},
+  ]},
+
+  // ── I/O ─────────────────────────────────────────────────────
+  io: { label:"Entrées / Sorties", color:"#84cc16", icon:"⇄", blocks:[
+    {id:"cs_printf_i",  name:"printf int",    preview:'printf("%d\\n", x);',          tpl:'printf("{fmt}\\n", {var});',fields:[{id:"fmt",l:"Format",d:"%d"},{id:"var",l:"Variable",d:"x"}]},
+    {id:"cs_printf_s",  name:"printf string", preview:'printf("%s\\n", str);',        tpl:'printf("%s\\n", {var});',   fields:[{id:"var",l:"Variable",d:"str"}]},
+    {id:"cs_printf_f",  name:"printf float",  preview:'printf("%.2f\\n", f);',        tpl:'printf("{fmt}\\n", {var});',fields:[{id:"fmt",l:"Format",d:"%.2f"},{id:"var",l:"Variable",d:"f"}]},
+    {id:"cs_scanf",     name:"scanf",         preview:'scanf("%d", &x);',             tpl:'scanf("{fmt}", &{var});',   fields:[{id:"fmt",l:"Format",d:"%d"},{id:"var",l:"Variable",d:"x"}]},
+    {id:"cs_fopen",     name:"fopen",         preview:'FILE *f = fopen("f","r");',    tpl:'FILE *{var} = fopen("{file}", "{mode}");',fields:[{id:"var",l:"Variable",d:"f"},{id:"file",l:"Fichier",d:"file.txt"},{id:"mode",l:"Mode",d:"r"}]},
+    {id:"cs_fclose",    name:"fclose",        preview:"fclose(f);",                   tpl:"fclose({var});",             fields:[{id:"var",l:"Fichier",d:"f"}]},
+    {id:"cs_fprintf",   name:"fprintf",       preview:'fprintf(f, "%d\\n", x);',      tpl:'fprintf({file}, "{fmt}\\n", {var});',fields:[{id:"file",l:"Fichier",d:"f"},{id:"fmt",l:"Format",d:"%d"},{id:"var",l:"Variable",d:"x"}]},
+    {id:"cs_fgets",     name:"fgets",         preview:"fgets(buf, sizeof(buf), f);",  tpl:"fgets({buf}, sizeof({buf}), {file});",fields:[{id:"buf",l:"Buffer",d:"buf"},{id:"file",l:"Fichier",d:"f"}]},
+    {id:"cs_perror",    name:"perror",        preview:'perror("erreur");',             tpl:'perror("{msg}");',           fields:[{id:"msg",l:"Message",d:"erreur"}]},
+    {id:"cs_putchar",   name:"putchar",       preview:"putchar('\\n');",               tpl:"putchar({c});",              fields:[{id:"c",l:"Char",d:"'\\n'"}]},
+  ]},
+
+  // ── OPERATORS ───────────────────────────────────────────────
+  operators: { label:"Opérateurs", color:"#f97316", icon:"∑", blocks:[
+    {id:"cs_ternary",   name:"ternaire ? :", preview:"x > 0 ? x : -x",  tpl:"{cond} ? {vt} : {vf}",fields:[{id:"cond",l:"Condition",d:"x > 0"},{id:"vt",l:"Si vrai",d:"x"},{id:"vf",l:"Si faux",d:"-x"}]},
+    {id:"cs_bitand",    name:"AND &",        preview:"r = a & b;",       tpl:"{r} = {a} & {b};",    fields:[{id:"r",l:"Résultat",d:"r"},{id:"a",l:"A",d:"a"},{id:"b",l:"B",d:"b"}]},
+    {id:"cs_bitor",     name:"OR |",         preview:"r = a | b;",       tpl:"{r} = {a} | {b};",    fields:[{id:"r",l:"Résultat",d:"r"},{id:"a",l:"A",d:"a"},{id:"b",l:"B",d:"b"}]},
+    {id:"cs_bitxor",    name:"XOR ^",        preview:"r = a ^ b;",       tpl:"{r} = {a} ^ {b};",    fields:[{id:"r",l:"Résultat",d:"r"},{id:"a",l:"A",d:"a"},{id:"b",l:"B",d:"b"}]},
+    {id:"cs_bitnot",    name:"NOT ~",        preview:"r = ~a;",          tpl:"{r} = ~{a};",          fields:[{id:"r",l:"Résultat",d:"r"},{id:"a",l:"A",d:"a"}]},
+    {id:"cs_shl",       name:"shift <<",     preview:"r = x << 2;",      tpl:"{r} = {v} << {n};",   fields:[{id:"r",l:"Résultat",d:"r"},{id:"v",l:"Valeur",d:"x"},{id:"n",l:"Bits",d:"2"}]},
+    {id:"cs_shr",       name:"shift >>",     preview:"r = x >> 2;",      tpl:"{r} = {v} >> {n};",   fields:[{id:"r",l:"Résultat",d:"r"},{id:"v",l:"Valeur",d:"x"},{id:"n",l:"Bits",d:"2"}]},
+    {id:"cs_assign_op", name:"affectation",  preview:"x += 1;",          tpl:"{var} {op} {val};",   fields:[{id:"var",l:"Variable",d:"x"},{id:"op",l:"Op",d:"+="},{id:"val",l:"Valeur",d:"1"}]},
+    {id:"cs_comment",   name:"// commentaire",preview:"// texte",        tpl:"// {text}",            fields:[{id:"text",l:"Texte",d:"commentaire"}]},
+    {id:"cs_block_cmt", name:"/* bloc */",   preview:"/* texte */",      tpl:"/* {text} */",         fields:[{id:"text",l:"Texte",d:"description"}]},
+    {id:"cs_section",   name:"=== section ===",preview:"/* === SEC === */",tpl:"/* ============ {text} ============ */",fields:[{id:"text",l:"Titre",d:"SECTION"}]},
+  ]},
+};
+
+
+// ============================================================
+//  C-SCRATCH — Static Analyzer
+//  Rust-style memory safety checks on the block graph
+// ============================================================
+
+var CSAnalyzer = (function() {
+
+  // ── Helpers ─────────────────────────────────────────────────
+  function getFieldVal(block, fieldId) {
+    if (block.fields && block.fields[fieldId] !== undefined) return block.fields[fieldId];
+    var fd = (block.fieldDefs || []).find(function(f){ return f.id === fieldId; });
+    return fd ? fd.d : '';
+  }
+
+  function isMemoryBlock(block, kind) {
+    var def = block.blockDefId || '';
+    if (kind === 'malloc')   return def === 'cs_malloc'  || def === 'cs_calloc';
+    if (kind === 'realloc')  return def === 'cs_realloc';
+    if (kind === 'free')     return def === 'cs_free';
+    if (kind === 'nullcheck')return def === 'cs_null_check';
+    return false;
+  }
+
+  function getVarName(block) {
+    return getFieldVal(block, 'name') || getFieldVal(block, 'ptr') || '';
+  }
+
+  // ── Main analysis function ───────────────────────────────────
+  // Takes ordered blocks array, returns analysis result
+  function analyze(blocks) {
+    var result = {
+      allocations: [],   // list of {blockId, varName, type, allocId, freed, freeBlockId, nullChecked, usedAfterFree}
+      errors:      [],   // {type, message, blockId, relatedBlockId}
+      warnings:    [],
+    };
+
+    if (!blocks || !blocks.length) return result;
+
+    // Pass 1: collect all malloc/calloc
+    var allocMap = {};  // varName → allocation info
+    blocks.forEach(function(block, idx) {
+      if (isMemoryBlock(block, 'malloc')) {
+        var varName = getVarName(block);
+        var type    = getFieldVal(block, 'type');
+        var n       = getFieldVal(block, 'n');
+        var allocId = block._allocId || ('alloc_' + String(idx + 1).padStart(3, '0'));
+        block._allocId = allocId;  // stamp the block
+        var info = {
+          blockId:      block.id,
+          blockIdx:     idx,
+          varName:      varName,
+          type:         type,
+          n:            n,
+          allocId:      allocId,
+          freed:        false,
+          freeBlockId:  null,
+          freeBlockIdx: null,
+          nullChecked:  false,
+          usedAfterFree: false,
+        };
+        allocMap[varName] = info;
+        result.allocations.push(info);
+      }
+    });
+
+    // Pass 2: scan for free, null-check, use-after-free
+    var freedVars = {};  // varName → {blockIdx, blockId}
+
+    blocks.forEach(function(block, idx) {
+      if (isMemoryBlock(block, 'free')) {
+        var varName = getVarName(block);
+        if (allocMap[varName]) {
+          // Check double-free
+          if (allocMap[varName].freed) {
+            result.errors.push({
+              type:           'DOUBLE_FREE',
+              message:        '⛔ Double free: "' + varName + '" déjà libéré au bloc #' + (allocMap[varName].freeBlockIdx + 1),
+              blockId:        block.id,
+              relatedBlockId: allocMap[varName].freeBlockId,
+              severity:       'error',
+            });
+          } else {
+            allocMap[varName].freed        = true;
+            allocMap[varName].freeBlockId  = block.id;
+            allocMap[varName].freeBlockIdx = idx;
+            freedVars[varName] = { blockIdx: idx, blockId: block.id };
+          }
+        } else {
+          // Freeing unknown pointer (not tracked — could be parameter)
+          result.warnings.push({
+            type:     'FREE_UNKNOWN',
+            message:  '⚠ free("' + varName + '") — pointeur non alloué dans ce contexte',
+            blockId:  block.id,
+            severity: 'warning',
+          });
+        }
+      }
+
+      if (isMemoryBlock(block, 'nullcheck')) {
+        var varName = getFieldVal(block, 'ptr');
+        if (allocMap[varName]) {
+          allocMap[varName].nullChecked = true;
+        }
+      }
+
+      // Use-after-free: any block that uses a varName after it was freed
+      if (!isMemoryBlock(block, 'free') && !isMemoryBlock(block, 'malloc')) {
+        Object.keys(freedVars).forEach(function(varName) {
+          var freeInfo = freedVars[varName];
+          if (idx > freeInfo.blockIdx) {
+            // Check if this block references varName in any field
+            var code = '';
+            (block.fieldDefs || []).forEach(function(fd) {
+              code += ' ' + (block.fields[fd.id] || fd.d);
+            });
+            (block.children || []).forEach(function(ch) {
+              (ch.fieldDefs || []).forEach(function(fd) {
+                code += ' ' + (ch.fields[fd.id] || fd.d);
+              });
+            });
+            // Also check generated code template
+            code += ' ' + (block.tpl || '');
+
+            var regex = new RegExp('\\b' + varName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b');
+            if (regex.test(code)) {
+              if (!allocMap[varName].usedAfterFree) {
+                allocMap[varName].usedAfterFree = true;
+                result.errors.push({
+                  type:           'USE_AFTER_FREE',
+                  message:        '⛔ Use-after-free: "' + varName + '" utilisé après free()',
+                  blockId:        block.id,
+                  relatedBlockId: freeInfo.blockId,
+                  severity:       'error',
+                });
+              }
+            }
+          }
+        });
+      }
+    });
+
+    // Pass 3: check for leaks and missing null-checks
+    result.allocations.forEach(function(alloc) {
+      if (!alloc.freed) {
+        result.errors.push({
+          type:     'MEMORY_LEAK',
+          message:  '🔴 Fuite mémoire: "' + alloc.varName + '" (' + alloc.allocId + ') jamais libéré',
+          blockId:  alloc.blockId,
+          severity: 'error',
+        });
+      }
+      if (!alloc.nullChecked) {
+        result.warnings.push({
+          type:     'NULL_DEREF',
+          message:  '⚠ "' + alloc.varName + '" : pas de vérification NULL après malloc',
+          blockId:  alloc.blockId,
+          severity: 'warning',
+        });
+      }
+    });
+
+    return result;
+  }
+
+  // ── Apply analysis results to canvas blocks ──────────────────
+  function applyToCanvas(analysisResult, worldEl) {
+    if (!worldEl) return;
+
+    // Clear all previous analysis markers
+    worldEl.querySelectorAll('.canvas-block').forEach(function(el) {
+      el.classList.remove('cs-error', 'cs-warning', 'cs-leak', 'cs-safe');
+      var badge = el.querySelector('.cs-analysis-badge');
+      if (badge) badge.remove();
+    });
+
+    var blockMessages = {};  // blockId → {errors:[], warnings:[]}
+
+    function addMsg(blockId, msg, severity) {
+      if (!blockMessages[blockId]) blockMessages[blockId] = { errors: [], warnings: [] };
+      if (severity === 'error')   blockMessages[blockId].errors.push(msg);
+      else                        blockMessages[blockId].warnings.push(msg);
+    }
+
+    (analysisResult.errors || []).forEach(function(e) {
+      addMsg(e.blockId, e.message, 'error');
+    });
+    (analysisResult.warnings || []).forEach(function(w) {
+      addMsg(w.blockId, w.message, 'warning');
+    });
+
+    // Mark safe mallocs
+    (analysisResult.allocations || []).forEach(function(alloc) {
+      if (alloc.freed && alloc.nullChecked && !alloc.usedAfterFree) {
+        var el = worldEl.querySelector('.canvas-block[data-bid="' + alloc.blockId + '"]');
+        if (el) el.classList.add('cs-safe');
+      }
+    });
+
+    // Apply error/warning badges
+    Object.keys(blockMessages).forEach(function(blockId) {
+      var el = worldEl.querySelector('.canvas-block[data-bid="' + blockId + '"]');
+      if (!el) return;
+      var msgs = blockMessages[blockId];
+      if (msgs.errors.length)   el.classList.add('cs-error');
+      if (msgs.warnings.length && !msgs.errors.length) el.classList.add('cs-warning');
+
+      var badge = document.createElement('div');
+      badge.className = 'cs-analysis-badge';
+      var allMsgs = msgs.errors.concat(msgs.warnings);
+      badge.textContent = allMsgs[0];
+      badge.title = allMsgs.join('\n');
+      el.appendChild(badge);
+    });
+  }
+
+  // ── Hover links: malloc ↔ free ───────────────────────────────
+  var _svgOverlay = null;
+
+  function initSVGOverlay(canvasEl) {
+    if (_svgOverlay) return;
+    _svgOverlay = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    _svgOverlay.style.cssText = 'position:absolute;inset:0;pointer-events:none;z-index:500;overflow:visible';
+    canvasEl.appendChild(_svgOverlay);
+  }
+
+  function clearLinks() {
+    if (_svgOverlay) _svgOverlay.innerHTML = '';
+  }
+
+  function drawLink(fromEl, toEl, color) {
+    if (!_svgOverlay || !fromEl || !toEl) return;
+    var fr = fromEl.getBoundingClientRect();
+    var tr = toEl.getBoundingClientRect();
+    var cr = _svgOverlay.parentElement.getBoundingClientRect();
+    var x1 = fr.left + fr.width / 2 - cr.left;
+    var y1 = fr.bottom - cr.top;
+    var x2 = tr.left + tr.width / 2 - cr.left;
+    var y2 = tr.top - cr.top;
+    var mid = (y1 + y2) / 2;
+
+    var path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path.setAttribute('d', 'M' + x1 + ',' + y1 + ' C' + x1 + ',' + mid + ' ' + x2 + ',' + mid + ' ' + x2 + ',' + y2);
+    path.setAttribute('stroke', color || '#ef4444');
+    path.setAttribute('stroke-width', '2');
+    path.setAttribute('fill', 'none');
+    path.setAttribute('stroke-dasharray', '6,3');
+    path.setAttribute('opacity', '0.8');
+    _svgOverlay.appendChild(path);
+
+    // Arrow head
+    var dx = x2 - x1, dy = y2 - mid;
+    var len = Math.sqrt(dx*dx + dy*dy) || 1;
+    var arr = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+    arr.setAttribute('points', x2 + ',' + y2 + ' ' + (x2-6) + ',' + (y2-10) + ' ' + (x2+6) + ',' + (y2-10));
+    arr.setAttribute('fill', color || '#ef4444');
+    arr.setAttribute('opacity', '0.8');
+    _svgOverlay.appendChild(arr);
+  }
+
+  function setupHoverLinks(analysisResult, worldEl, canvasEl) {
+    initSVGOverlay(canvasEl);
+
+    // Build map: blockId → its alloc/free partner blockId
+    var linkMap = {};
+    (analysisResult.allocations || []).forEach(function(alloc) {
+      if (alloc.freeBlockId) {
+        linkMap[alloc.blockId]      = { partner: alloc.freeBlockId,  color: alloc.freed && !alloc.usedAfterFree ? '#22c55e' : '#ef4444' };
+        linkMap[alloc.freeBlockId]  = { partner: alloc.blockId,      color: alloc.freed && !alloc.usedAfterFree ? '#22c55e' : '#ef4444' };
+      }
+    });
+
+    worldEl.querySelectorAll('.canvas-block').forEach(function(el) {
+      var bid = el.dataset.bid;
+      if (!linkMap[bid]) return;
+
+      el.addEventListener('mouseenter', function() {
+        clearLinks();
+        var partner = worldEl.querySelector('.canvas-block[data-bid="' + linkMap[bid].partner + '"]');
+        if (partner) {
+          drawLink(el, partner, linkMap[bid].color);
+          partner.classList.add('cs-linked');
+        }
+      });
+      el.addEventListener('mouseleave', function() {
+        clearLinks();
+        var partner = worldEl.querySelector('.canvas-block[data-bid="' + linkMap[bid].partner + '"]');
+        if (partner) partner.classList.remove('cs-linked');
+      });
+    });
+  }
+
+  return {
+    analyze:        analyze,
+    applyToCanvas:  applyToCanvas,
+    setupHoverLinks:setupHoverLinks,
+    clearLinks:     clearLinks,
+  };
+})();
+
+
+// ============================================================
+//  C-SCRATCH — Memory Inspector Panel
+//  Interactive panel showing all allocations and their status
+// ============================================================
+
+var CSMemoryPanel = (function() {
+
+  var _panelEl = null;
+  var _lastResult = null;
+
+  // ── Create panel DOM ─────────────────────────────────────────
+  function createPanel() {
+    var panel = document.createElement('div');
+    panel.id = 'cs-memory-panel';
+    panel.innerHTML =
+      '<div id="cs-mem-header">' +
+        '<span id="cs-mem-title">🧠 Mémoire</span>' +
+        '<div id="cs-mem-summary"></div>' +
+        '<button id="cs-mem-close" title="Fermer">✕</button>' +
+      '</div>' +
+      '<div id="cs-mem-body"></div>' +
+      '<div id="cs-mem-footer"></div>';
+
+    panel.querySelector('#cs-mem-close').addEventListener('click', function() {
+      panel.classList.toggle('collapsed');
+    });
+
+    return panel;
+  }
+
+  // ── Render allocation list ───────────────────────────────────
+  function render(analysisResult) {
+    _lastResult = analysisResult;
+    if (!_panelEl) return;
+
+    var body    = _panelEl.querySelector('#cs-mem-body');
+    var summary = _panelEl.querySelector('#cs-mem-summary');
+    var footer  = _panelEl.querySelector('#cs-mem-footer');
+
+    var allocs   = analysisResult.allocations || [];
+    var errors   = analysisResult.errors      || [];
+    var warnings = analysisResult.warnings    || [];
+
+    var leaks      = errors.filter(function(e){ return e.type === 'MEMORY_LEAK'; }).length;
+    var doubleFree = errors.filter(function(e){ return e.type === 'DOUBLE_FREE'; }).length;
+    var uaf        = errors.filter(function(e){ return e.type === 'USE_AFTER_FREE'; }).length;
+    var nullWarn   = warnings.filter(function(w){ return w.type === 'NULL_DEREF'; }).length;
+
+    // Summary chips
+    summary.innerHTML =
+      (leaks      ? '<span class="cs-chip cs-chip-err">🔴 ' + leaks      + ' fuite'+(leaks>1?'s':'')+'</span>' : '') +
+      (doubleFree ? '<span class="cs-chip cs-chip-err">⛔ ' + doubleFree + ' double-free</span>' : '') +
+      (uaf        ? '<span class="cs-chip cs-chip-err">⛔ ' + uaf        + ' use-after-free</span>' : '') +
+      (nullWarn   ? '<span class="cs-chip cs-chip-warn">⚠ ' + nullWarn  + ' null-check manquant</span>' : '') +
+      (!leaks && !doubleFree && !uaf ? '<span class="cs-chip cs-chip-ok">✅ Mémoire saine</span>' : '');
+
+    // Allocation rows
+    if (!allocs.length) {
+      body.innerHTML = '<div class="cs-mem-empty">Aucune allocation détectée.<br>Ajoutez des blocs <strong>malloc</strong> ou <strong>calloc</strong>.</div>';
+    } else {
+      body.innerHTML = '';
+      allocs.forEach(function(alloc) {
+        var status, statusClass, statusIcon;
+        if (alloc.usedAfterFree) {
+          status = 'USE-AFTER-FREE'; statusClass = 'cs-status-uaf';   statusIcon = '⛔';
+        } else if (!alloc.freed) {
+          status = 'LEAK';           statusClass = 'cs-status-leak';  statusIcon = '🔴';
+        } else if (!alloc.nullChecked) {
+          status = 'NO NULL CHECK';  statusClass = 'cs-status-warn';  statusIcon = '⚠';
+        } else {
+          status = 'SAFE';           statusClass = 'cs-status-safe';  statusIcon = '✅';
+        }
+
+        var row = document.createElement('div');
+        row.className = 'cs-alloc-row ' + statusClass;
+        row.dataset.bid = alloc.blockId;
+
+        row.innerHTML =
+          '<div class="cs-alloc-header">' +
+            '<span class="cs-alloc-id">' + alloc.allocId + '</span>' +
+            '<span class="cs-alloc-var">' + escH(alloc.varName) + '</span>' +
+            '<span class="cs-alloc-type">' + escH(alloc.type) + ' *</span>' +
+            '<span class="cs-alloc-status ' + statusClass + '">' + statusIcon + ' ' + status + '</span>' +
+          '</div>' +
+          '<div class="cs-alloc-details">' +
+            '<div class="cs-alloc-line">📦 malloc(' + escH(alloc.n) + ' × sizeof(' + escH(alloc.type) + '))</div>' +
+            (alloc.freed
+              ? '<div class="cs-alloc-line cs-line-ok">🗑 free() trouvé</div>'
+              : '<div class="cs-alloc-line cs-line-err">🗑 free() <strong>manquant !</strong></div>') +
+            (alloc.nullChecked
+              ? '<div class="cs-alloc-line cs-line-ok">🔒 NULL check OK</div>'
+              : '<div class="cs-alloc-line cs-line-warn">🔒 NULL check manquant</div>') +
+          '</div>';
+
+        // Click → scroll to block on canvas
+        row.addEventListener('click', function() {
+          var blockEl = document.querySelector('.canvas-block[data-bid="' + alloc.blockId + '"]');
+          if (blockEl) {
+            blockEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            blockEl.classList.add('cs-highlight-pulse');
+            setTimeout(function(){ blockEl.classList.remove('cs-highlight-pulse'); }, 1500);
+          }
+        });
+
+        body.appendChild(row);
+      });
+    }
+
+    // Footer: all errors/warnings list
+    var allIssues = errors.concat(warnings);
+    if (allIssues.length) {
+      footer.innerHTML = '<div class="cs-issues-title">Problèmes détectés (' + allIssues.length + ')</div>';
+      allIssues.forEach(function(issue) {
+        var item = document.createElement('div');
+        item.className = 'cs-issue-item ' + (issue.severity === 'error' ? 'cs-issue-err' : 'cs-issue-warn');
+        item.textContent = issue.message;
+        item.dataset.bid = issue.blockId;
+        item.addEventListener('click', function() {
+          var blockEl = document.querySelector('.canvas-block[data-bid="' + issue.blockId + '"]');
+          if (blockEl) {
+            blockEl.classList.add('cs-highlight-pulse');
+            setTimeout(function(){ blockEl.classList.remove('cs-highlight-pulse'); }, 1500);
+          }
+        });
+        footer.appendChild(item);
+      });
+    } else {
+      footer.innerHTML = '';
+    }
+  }
+
+  // ── Inject panel into DOM ────────────────────────────────────
+  function mount(containerEl) {
+    if (_panelEl) return;
+    _panelEl = createPanel();
+    containerEl.appendChild(_panelEl);
+  }
+
+  function unmount() {
+    if (_panelEl) { _panelEl.remove(); _panelEl = null; }
+  }
+
+  function refresh(analysisResult) {
+    if (_panelEl) render(analysisResult);
+  }
+
+  function escH(s) {
+    return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  return { mount: mount, unmount: unmount, refresh: refresh };
+})();
+
+
+// ============================================================
+//  C-SCRATCH — Plugin Entry Point
+//  Registers with the C-Builder engine plugin API
+//
+//  Load order in index.html:
+//    cscratch.css
+//    cscratch-blocks.js
+//    cscratch-analyzer.js
+//    cscratch-panel.js
+//    cscratch-plugin.js   ← this file
+// ============================================================
+
+// ── C Syntax Highlighter (same as C plugin) ──────────────────
+var CS_KW  = new Set(['auto','break','case','char','const','continue','default','do','double','else','enum','extern','float','for','goto','if','inline','int','long','register','restrict','return','short','signed','sizeof','static','struct','switch','typedef','union','unsigned','void','volatile','while']);
+var CS_TY  = new Set(['int','float','double','char','void','long','short','unsigned','signed','size_t','uint8_t','uint16_t','uint32_t','uint64_t','int8_t','int16_t','int32_t','int64_t','bool','FILE','NULL','true','false','ptrdiff_t']);
+var CS_STD = new Set(['printf','fprintf','sprintf','snprintf','scanf','fscanf','malloc','calloc','realloc','free','memcpy','memmove','memset','strlen','strcpy','strcat','strcmp','fopen','fclose','fread','fwrite','fgets','fputs','exit','abort','atoi','rand','getchar','putchar','perror']);
+
+function csHL(code) {
+  if (!code) return '';
+  return code.split('\n').map(function(line) {
+    if (/^\s*#/.test(line)) return '<span class="cp">' + csEscH(line) + '</span>';
+    var ci = -1;
+    for (var i = 0; i < line.length - 1; i++) {
+      if (line[i] === '/' && line[i+1] === '/') { ci = i; break; }
+    }
+    var co = ci >= 0 ? line.slice(0, ci) : line;
+    var cm = ci >= 0 ? '<span class="cc">' + csEscH(line.slice(ci)) + '</span>' : '';
+    // Colorize alloc-id comments /* alloc_XXX */
+    co = co.replace(/(\/\*\s*(?:alloc|realloc|free)\s+alloc_\d+\s*\*\/)/g,
+      '<span class="cs-alloc-ref">$1</span>');
+    return csTok(co) + cm;
+  }).join('\n');
+}
+
+function csTok(code) {
+  var r = '', i = 0;
+  while (i < code.length) {
+    if (code[i] === '"') {
+      var j = i+1; while (j < code.length && !(code[j] === '"' && code[j-1] !== '\\')) j++;
+      r += '<span class="cs">' + csEscH(code.slice(i, j+1)) + '</span>'; i = j+1; continue;
+    }
+    if (code[i] === "'" && i+2 < code.length) {
+      var j = i+1; while (j < code.length && !(code[j] === "'" && code[j-1] !== '\\')) j++;
+      r += '<span class="cs">' + csEscH(code.slice(i, j+1)) + '</span>'; i = j+1; continue;
+    }
+    if (/[0-9]/.test(code[i])) {
+      var j = i+1; while (j < code.length && /[0-9a-fA-FxXuUlLfF.]/.test(code[j])) j++;
+      r += '<span class="cn">' + csEscH(code.slice(i, j)) + '</span>'; i = j; continue;
+    }
+    if (/[a-zA-Z_]/.test(code[i])) {
+      var j = i+1; while (j < code.length && /[a-zA-Z0-9_]/.test(code[j])) j++;
+      var w = code.slice(i, j);
+      var isFn = code.slice(j).trimStart().startsWith('(');
+      if (CS_TY.has(w))       r += '<span class="ct">' + csEscH(w) + '</span>';
+      else if (CS_KW.has(w))  r += '<span class="ck">' + csEscH(w) + '</span>';
+      else if (isFn || CS_STD.has(w)) r += '<span class="cf">' + csEscH(w) + '</span>';
+      else if (/^[A-Z_][A-Z0-9_]+$/.test(w)) r += '<span class="cm">' + csEscH(w) + '</span>';
+      else r += csEscH(w);
+      i = j; continue;
+    }
+    r += csEscH(code[i]); i++;
+  }
+  return r;
+}
+function csEscH(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ── Code generator override (injects alloc IDs) ──────────────
+function csRenderTpl(tpl, fieldDefs, fields) {
+  var r = tpl;
+  (fieldDefs || []).forEach(function(fd) {
+    var v = fields && fields[fd.id] !== undefined ? fields[fd.id] : fd.d;
+    r = r.split('{' + fd.id + '}').join(v);
+  });
+  // Replace {_aid} with the block's stamped allocId
+  r = r.split('{_aid}').join(fields && fields._aid ? fields._aid : 'alloc_???');
+  return r;
+}
+
+// ── Validator (C + memory safety) ────────────────────────────
+function csValidate(code, block) {
+  var errors = [], warnings = [];
+  // Unresolved placeholders (skip _aid)
+  var unresolved = code.match(/\{[a-zA-Z_]\w*\}/g);
+  if (unresolved) {
+    var u = unresolved.filter(function(v){ return v !== '{_aid}'; })
+                      .filter(function(v,i,a){ return a.indexOf(v)===i; });
+    if (u.length) errors.push('Champ(s) non rempli(s): ' + u.join(', '));
+  }
+  // Semicolons for simple statements
+  if (!block.isContainer) {
+    var t = code.trim();
+    if (!t.startsWith('#') && !t.startsWith('//') && !t.startsWith('/*')
+        && !t.endsWith('{') && !t.endsWith('}') && !t.endsWith(';')) {
+      if (/^(int|float|double|char|void|long|short|static|extern|const|return|free|memset|memcpy|printf|scanf)/.test(t))
+        warnings.push('Point-virgule manquant?');
+    }
+  }
+  // Parens balance
+  var po = (code.match(/\(/g)||[]).length, pc = (code.match(/\)/g)||[]).length;
+  if (po !== pc) warnings.push('Parenthèses déséquilibrées');
+  return { errors: errors, warnings: warnings };
+}
+
+// ── Engine integration hooks ──────────────────────────────────
+var _csAnalysisEnabled  = true;
+var _csPanelMounted     = false;
+var _csWorldEl          = null;
+var _csCanvasEl         = null;
+var _csCodePanelEl      = null;
+
+function csRunAnalysis() {
+  if (!_csAnalysisEnabled || !_csWorldEl) return;
+
+  // Get ordered blocks from active tab
+  var ordered = typeof getOrderedBlocks === 'function' ? getOrderedBlocks() : [];
+
+  // Stamp alloc IDs onto malloc/calloc blocks before analysis
+  var allocIdx = 0;
+  ordered.forEach(function(block) {
+    var def = block.blockDefId || '';
+    if (def === 'cs_malloc' || def === 'cs_calloc') {
+      allocIdx++;
+      var aid = 'alloc_' + String(allocIdx).padStart(3, '0');
+      block._allocId   = aid;
+      if (!block.fields) block.fields = {};
+      block.fields._aid = aid;
+    }
+  });
+
+  var result = CSAnalyzer.analyze(ordered);
+  CSAnalyzer.applyToCanvas(result, _csWorldEl);
+  CSAnalyzer.setupHoverLinks(result, _csWorldEl, _csCanvasEl);
+  if (_csPanelMounted) CSMemoryPanel.refresh(result);
+}
+
+function csMountPanel() {
+  if (_csPanelMounted || !_csCodePanelEl) return;
+  _csPanelMounted = true;
+  // Insert panel after code panel's parent (workspace)
+  var workspace = _csCodePanelEl.parentElement;
+  CSMemoryPanel.mount(workspace);
+  // Run initial analysis
+  csRunAnalysis();
+}
+
+function csTogglePanel() {
+  if (_csPanelMounted) {
+    CSMemoryPanel.unmount();
+    _csPanelMounted = false;
+    document.getElementById('btn-mem-panel').classList.remove('active');
+  } else {
+    csMountPanel();
+    document.getElementById('btn-mem-panel').classList.add('active');
+  }
+}
+
+// ── Register plugin ───────────────────────────────────────────
+registerLanguage({
+  id:    'cscratch',
+  name:  'C-Scratch',
+  icon:  'CS',
+  color: '#ef4444',
+
+  fileTypes: {
+    c:  { label: 'C-Scratch (.c)',  blocks: CS_BLOCKS },
+    h:  { label: 'C-Scratch (.h)',  blocks: CS_BLOCKS },
+  },
+
+  highlight: csHL,
+  validate:  csValidate,
+  indent:    '    ',
+  blockSep:  '\n',
+
+  // Called by engine after it's booted and DOM is ready
+  onMount: function(ctx) {
+    _csWorldEl     = ctx.worldEl     || document.getElementById('world');
+    _csCanvasEl    = ctx.canvasEl    || document.getElementById('canvas');
+    _csCodePanelEl = ctx.codePanelEl || document.getElementById('code-panel');
+
+    // Add memory panel button to header
+    var headerActions = document.getElementById('header-actions');
+    if (headerActions && !document.getElementById('btn-mem-panel')) {
+      var btn = document.createElement('button');
+      btn.id = 'btn-mem-panel';
+      btn.textContent = '🧠 mémoire';
+      btn.title = 'Inspecteur de mémoire C-Scratch';
+      btn.addEventListener('click', csTogglePanel);
+      headerActions.insertBefore(btn, headerActions.firstChild);
+    }
+
+    // Auto-mount panel by default
+    csMountPanel();
+    document.getElementById('btn-mem-panel').classList.add('active');
+  },
+
+  // Called after every canvas render / block change
+  onCanvasUpdate: function() {
+    csRunAnalysis();
+  },
+});
+
+// ── Patch engine renderCanvas to trigger analysis after render ─
+// We hook into the existing renderCanvas function
+(function() {
+  var _boot = setInterval(function() {
+    if (typeof renderCanvas !== 'undefined' && typeof registerLanguage !== 'undefined') {
+      clearInterval(_boot);
+
+      var _origRC = renderCanvas;
+      renderCanvas = function() {
+        _origRC.apply(this, arguments);
+        // Short delay to let DOM settle
+        setTimeout(csRunAnalysis, 50);
+      };
+
+      var _origAB = typeof addBlock !== 'undefined' ? addBlock : null;
+      if (_origAB) {
+        addBlock = function() {
+          _origAB.apply(this, arguments);
+          setTimeout(csRunAnalysis, 80);
+        };
+      }
+
+      // Hook renderCode to also trigger analysis
+      var _origRCode = typeof renderCode !== 'undefined' ? renderCode : null;
+      if (_origRCode) {
+        renderCode = function() {
+          _origRCode.apply(this, arguments);
+          setTimeout(csRunAnalysis, 30);
+        };
+      }
+
+      // Initial mount after engine boot
+      setTimeout(function() {
+        var plugin = typeof getPlugin !== 'undefined' ? getPlugin('c') : null;
+        // find cscratch plugin and call onMount
+        if (typeof getAllPlugins !== 'undefined') {
+          getAllPlugins().forEach(function(p) {
+            if (p.id === 'cscratch' && p.onMount) {
+              p.onMount({
+                worldEl:     document.getElementById('world'),
+                canvasEl:    document.getElementById('canvas'),
+                codePanelEl: document.getElementById('code-panel'),
+              });
+            }
+          });
+        }
+      }, 300);
+    }
+  }, 100);
+})();
+
+
+// ============================================================
+//  C BUILDER ENGINE — Core (language-agnostic)
+//  Load order: plugin-api.js → plugins → engine.js → extensions.js → boot.js
+// ============================================================
+
+// ============================================================
+// UTILS
+// ============================================================
+function escH(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
+
+// ============================================================
+// HIGHLIGHT
+// ============================================================
+// Legacy fallback (overridden by plugins)
+// Legacy fallback highlight (plugins override via getHighlighter)
+function hlC(code){ var h=getHighlighter("main.c"); return h?h(code):code; }
+var KW=new Set(['auto','break','case','char','const','continue','default','do','double','else','enum','extern','float','for','goto','if','inline','int','long','register','restrict','return','short','signed','sizeof','static','struct','switch','typedef','union','unsigned','void','volatile','while']);
+var TY=new Set(['int','float','double','char','void','long','short','unsigned','signed','size_t','uint8_t','uint16_t','uint32_t','uint64_t','int8_t','int16_t','int32_t','int64_t','bool','FILE','NULL','true','false','ptrdiff_t']);
+var STD=new Set(['printf','fprintf','sprintf','snprintf','scanf','fscanf','malloc','calloc','realloc','free','memcpy','memmove','memset','strlen','strcpy','strcat','strcmp','fopen','fclose','fread','fwrite','fgets','fputs','exit','abort','atoi','atof','rand','srand','getchar','putchar']);
+function hlC(code){
+  if(!code)return'';
+  return code.split('\n').map(function(line){
+    if(/^\s*#/.test(line))return'<span class="cp">'+escH(line)+'</span>';
+    var ci=-1;
+    for(var i=0;i<line.length-1;i++){if(line[i]==='/'&&line[i+1]==='/'){ci=i;break;}}
+    var co=ci>=0?line.slice(0,ci):line;
+    var cm=ci>=0?'<span class="cc">'+escH(line.slice(ci))+'</span>':'';
+    return tok(co)+cm;
+  }).join('\n');
+}
+function tok(code){
+  var r='',i=0;
+  while(i<code.length){
+    if(code[i]==='"'){var j=i+1;while(j<code.length&&!(code[j]==='"'&&code[j-1]!=='\\'))j++;r+='<span class="cs">'+escH(code.slice(i,j+1))+'</span>';i=j+1;continue;}
+    if(code[i]==="'"&&i+2<code.length){var j=i+1;while(j<code.length&&!(code[j]==="'"&&code[j-1]!=='\\'))j++;r+='<span class="cs">'+escH(code.slice(i,j+1))+'</span>';i=j+1;continue;}
+    if(/[0-9]/.test(code[i])){var j=i+1;while(j<code.length&&/[0-9a-fA-FxXuUlLfF.]/.test(code[j]))j++;r+='<span class="cn">'+escH(code.slice(i,j))+'</span>';i=j;continue;}
+    if(/[a-zA-Z_]/.test(code[i])){
+      var j=i+1;while(j<code.length&&/[a-zA-Z0-9_]/.test(code[j]))j++;
+      var w=code.slice(i,j);var isFn=code.slice(j).trimStart().startsWith('(');
+      if(TY.has(w))r+='<span class="ct">'+escH(w)+'</span>';
+      else if(KW.has(w))r+='<span class="ck">'+escH(w)+'</span>';
+      else if(isFn||STD.has(w))r+='<span class="cf">'+escH(w)+'</span>';
+      else if(/^[A-Z_][A-Z0-9_]+$/.test(w))r+='<span class="cm">'+escH(w)+'</span>';
+      else r+=escH(w);
+      i=j;continue;
+    }
+    r+=escH(code[i]);i++;
+  }
+  return r;
+}
+
+// ============================================================
+// STATE
+// ============================================================
+var S={
+  tabs:[{id:'tab_1',name:'main.c',blocks:[]}],
+  activeTab:'tab_1',
+  nextTabId:2,
+  nextBlockId:1,
+  selected:null,
+  sidebarDrag:null,
+  // Viewport
+  zoom:1,
+  panX:40,
+  panY:40,
+  isPanning:false,
+  panStart:{x:0,y:0},
+  panOrigin:{x:0,y:0},
+  // Block drag
+  blockDrag:null, // {block, el, offsetX, offsetY, followers:[{block,el,origY}]}
+};
+
+// Snap settings
+var SNAP_DIST = 50;   // pixels in world space to trigger snap
+var BLOCK_H_APPROX = 130; // approximate block height for snap target calc
+var BLOCK_GAP = 16;   // gap between snapped blocks
+
+function getTab(){return S.tabs.find(function(t){return t.id===S.activeTab;})}
+
+// ============================================================
+// DOM REFS
+// ============================================================
+var tabsBarEl      = document.getElementById('tabs-bar');
+var canvasEl       = document.getElementById('canvas');
+var worldEl        = document.getElementById('world');
+var canvasEmptyEl  = document.getElementById('canvas-empty');
+var snapGuideEl    = document.getElementById('snap-guide');
+var sidebarContentEl = document.getElementById('sidebar-content');
+var searchInputEl  = document.getElementById('search-input');
+var codeContentEl  = document.getElementById('code-content');
+var codeFilenameEl = document.getElementById('code-filename');
+var toastContainerEl = document.getElementById('toast-container');
+var dragGhostEl    = document.getElementById('drag-ghost');
+var zoomLabelEl    = document.getElementById('zoom-label');
+
+// ============================================================
+// TOAST
+// ============================================================
+function toast(msg,type){
+  var t=document.createElement('div');
+  t.className='toast '+(type||'');
+  t.textContent=(type==='success'?'✓ ':type==='error'?'✕ ':type==='warn'?'⚠ ':'')+msg;
+  toastContainerEl.appendChild(t);
+  setTimeout(function(){t.remove();},2300);
+}
+
+// ============================================================
+// VIEWPORT — zoom & pan
+// ============================================================
+function applyViewport(){
+  worldEl.style.transform='translate('+S.panX+'px,'+S.panY+'px) scale('+S.zoom+')';
+  zoomLabelEl.textContent=Math.round(S.zoom*100)+'%';
+  // Update grid background scale
+  var gs=24*S.zoom;
+  canvasEl.style.backgroundSize='auto,'+gs+'px '+gs+'px,'+gs+'px '+gs+'px';
+}
+
+function setZoom(z,cx,cy){
+  var oldZoom=S.zoom;
+  S.zoom=Math.min(2.5,Math.max(0.2,z));
+  if(cx!==undefined&&cy!==undefined){
+    // Zoom centered on canvas point (cx,cy)
+    S.panX=cx-(cx-S.panX)*(S.zoom/oldZoom);
+    S.panY=cy-(cy-S.panY)*(S.zoom/oldZoom);
+  }
+  applyViewport();
+}
+
+// Mouse wheel zoom
+canvasEl.addEventListener('wheel',function(e){
+  e.preventDefault();
+  var rect=canvasEl.getBoundingClientRect();
+  var cx=e.clientX-rect.left;
+  var cy=e.clientY-rect.top;
+  var delta=e.deltaY>0?-0.1:0.1;
+  setZoom(S.zoom+delta,cx,cy);
+},{passive:false});
+
+// CLIC DROIT = pan (prevent browser context menu everywhere)
+document.addEventListener('contextmenu',function(e){e.preventDefault();});
+canvasEl.addEventListener('mousedown',function(e){
+  if(e.button===2){
+    e.preventDefault();
+    S.isPanning=true;
+    S.panStart={x:e.clientX,y:e.clientY};
+    S.panOrigin={x:S.panX,y:S.panY};
+    canvasEl.classList.add('panning');
+  }
+});
+
+// Keyboard shortcuts
+document.addEventListener('keydown',function(e){
+  if(e.target.tagName==='INPUT')return;
+  if((e.key==='Delete'||e.key==='Backspace')&&S.selected)deleteBlock(S.selected);
+  if(e.ctrlKey&&e.key==='d'&&S.selected){e.preventDefault();dupBlock(S.selected);}
+  if(e.ctrlKey&&e.key==='c'){e.preventDefault();copyCode();}
+  if(e.key==='0'&&e.ctrlKey){e.preventDefault();resetZoom();}
+});
+
+document.addEventListener('mousemove',function(e){
+  if(S.isPanning){
+    S.panX=S.panOrigin.x+(e.clientX-S.panStart.x);
+    S.panY=S.panOrigin.y+(e.clientY-S.panStart.y);
+    applyViewport();
+  }
+  if(S.blockDrag)onBlockDragMove(e);
+});
+document.addEventListener('mouseup',function(e){
+  if(e.button===2&&S.isPanning){
+    S.isPanning=false;
+    canvasEl.classList.remove('panning');
+  }
+  if(e.button===0&&S.blockDrag)onBlockDragEnd(e);
+});
+
+function resetZoom(){
+  S.zoom=1;S.panX=40;S.panY=40;
+  applyViewport();
+}
+
+document.getElementById('btn-zoom-in').addEventListener('click',function(){setZoom(S.zoom+0.15);});
+document.getElementById('btn-zoom-out').addEventListener('click',function(){setZoom(S.zoom-0.15);});
+document.getElementById('btn-zoom-reset').addEventListener('click',resetZoom);
+zoomLabelEl.addEventListener('click',resetZoom);
+
+// Convert screen coords to world coords
+function screenToWorld(sx,sy){
+  var rect=canvasEl.getBoundingClientRect();
+  return {
+    x:(sx-rect.left-S.panX)/S.zoom,
+    y:(sy-rect.top-S.panY)/S.zoom
+  };
+}
+
+// ============================================================
+// SNAP LOGIC
+// ============================================================
+// Get ordered blocks by Y position
+function getOrderedBlocks(){
+  var tab=getTab();if(!tab)return[];
+  return tab.blocks.slice().sort(function(a,b){return a.y-b.y;});
+}
+
+// Find snap target: returns {targetBlock, snapY} or null
+function findSnap(draggingBlock, proposedX, proposedY){
+  var tab=getTab();if(!tab)return null;
+  var others=tab.blocks.filter(function(b){return b.id!==draggingBlock.id;});
+  var best=null,bestDist=Infinity;
+  others.forEach(function(b){
+    // Get real block element height
+    var el=worldEl.querySelector('.canvas-block[data-bid="'+b.id+'"]');
+    var bh=el?el.offsetHeight:BLOCK_H_APPROX;
+    // Snap point: just below block b
+    var snapY=b.y+bh+BLOCK_GAP;
+    var dist=Math.abs(proposedY-snapY)+Math.abs(proposedX-b.x)*0.3;
+    var yDist=Math.abs(proposedY-snapY);
+    if(yDist<SNAP_DIST&&dist<bestDist){
+      bestDist=dist;
+      best={targetBlock:b,snapY:snapY,snapX:b.x};
+    }
+  });
+  return best;
+}
+
+// Show snap guide at world Y
+function showSnapGuide(worldY, targetBlock){
+  // Convert world Y to canvas Y
+  var canvasY=worldY*S.zoom+S.panY;
+  snapGuideEl.style.top=canvasY+'px';
+  snapGuideEl.classList.add('visible');
+  // Highlight target block
+  worldEl.querySelectorAll('.canvas-block').forEach(function(el){el.classList.remove('snap-target');});
+  if(targetBlock){
+    var tEl=worldEl.querySelector('.canvas-block[data-bid="'+targetBlock.id+'"]');
+    if(tEl)tEl.classList.add('snap-target');
+  }
+}
+function hideSnapGuide(){
+  snapGuideEl.classList.remove('visible');
+  worldEl.querySelectorAll('.canvas-block.snap-target').forEach(function(el){el.classList.remove('snap-target');});
+}
+
+// ============================================================
+// CODE GENERATION
+// ============================================================
+function renderTpl(tpl,fieldDefs,fields){
+  var r=tpl;
+  (fieldDefs||[]).forEach(function(fd){
+    var v=fields&&fields[fd.id]!==undefined?fields[fd.id]:fd.d;
+    r=r.split('{'+fd.id+'}').join(v);
+  });
+  return r;
+}
+function genBlockCode(block){
+  var tpl=renderTpl(block.tpl,block.fieldDefs,block.fields);
+  if(block.isContainer){
+    var inner='';
+    (block.children||[]).forEach(function(ch){
+      var chCode=renderTpl(ch.tpl,ch.fieldDefs,ch.fields);
+      inner+='\n    '+chCode.split('\n').join('\n    ');
+    });
+    return tpl+inner+'\n'+(block.tplClose||'}');
+  }
+  return tpl;
+}
+function renderCode(){
+  var tab=getTab();
+  codeFilenameEl.textContent=tab?tab.name:'main.c';
+  var ordered=getOrderedBlocks();
+  if(!ordered.length){
+    codeContentEl.innerHTML='<span style="color:var(--text-dim)">// Glissez des blocs sur le canvas\n// pour générer du code C</span>';
+    codeContentEl.classList.remove('has-code');return;
+  }
+  codeContentEl.classList.add('has-code');
+  var lines=['// généré automatiquement (ordre haut → bas)',''];
+  ordered.forEach(function(b){lines.push(genBlockCode(b));lines.push('');});
+  var _hl=getHighlighter(tab?tab.name:'main.c');codeContentEl.innerHTML=_hl(lines.join('\n'));
+}
+function buildCodeText(){
+  var tab=getTab();var ordered=getOrderedBlocks();
+  if(!ordered.length)return null;
+  var lines=['// généré automatiquement (ordre haut → bas)',''];
+  ordered.forEach(function(b){lines.push(genBlockCode(b));lines.push('');});
+  return lines.join('\n');
+}
+
+// ============================================================
+// CANVAS RENDER
+// ============================================================
+function renderCanvas(){
+  worldEl.innerHTML='';
+  var tab=getTab();
+  if(!tab||!tab.blocks.length){canvasEmptyEl.classList.remove('hidden');return;}
+  canvasEmptyEl.classList.add('hidden');
+  var ordered=getOrderedBlocks();
+  ordered.forEach(function(b,i){
+    var el=makeBlockEl(b,i);
+    worldEl.appendChild(el);
+    if(i===0)el.classList.add('first-block');
+  });
+  applyViewport();
+}
+
+function makeBlockEl(block,idx){
+  var el=document.createElement('div');
+  el.className='canvas-block'+(block.isContainer?' is-container':'');
+  el.dataset.bid=block.id;
+  el.style.left=block.x+'px';
+  el.style.top=block.y+'px';
+  if(S.selected===block.id)el.classList.add('selected');
+  var cat=BLOCKS[block.catKey]||{};
+  var color=cat.color||'#8892a4';
+
+  // Order badge
+  var badge=document.createElement('div');
+  badge.className='order-badge';badge.textContent=idx+1;
+  el.appendChild(badge);
+
+  // Header
+  var hdr=document.createElement('div');hdr.className='bhead';
+  hdr.innerHTML='<div class="bdot" style="background:'+color+';box-shadow:0 0 6px '+color+'44"></div>'
+    +'<span class="btitle" style="color:'+color+'">'+escH(block.name)+'</span>'
+    +'<div class="bactions">'
+    +'<button class="bbtn" data-action="dup" title="Dupliquer (Ctrl+D)">⧉</button>'
+    +'<button class="bbtn del" data-action="del" title="Supprimer (Suppr)">✕</button>'
+    +'</div>';
+  el.appendChild(hdr);
+
+  // Body
+  var body=document.createElement('div');body.className='bbody';
+  // Fields
+  if(block.fieldDefs&&block.fieldDefs.length){
+    var flds=document.createElement('div');flds.className='bfields';
+    block.fieldDefs.forEach(function(fd){
+      var row=document.createElement('div');row.className='bfield';
+      var val=block.fields&&block.fields[fd.id]!==undefined?block.fields[fd.id]:fd.d;
+      row.innerHTML='<label>'+escH(fd.l)+'</label><input type="text" data-field="'+fd.id+'" value="'+escH(val)+'" placeholder="'+escH(fd.d)+'"/>';
+      flds.appendChild(row);
+    });
+    body.appendChild(flds);
+    flds.querySelectorAll('input').forEach(function(inp){
+      inp.addEventListener('input',function(){
+        block.fields[inp.dataset.field]=inp.value;
+        updateBlockCode(el,block);renderCode();
+      });
+      inp.addEventListener('click',function(e){e.stopPropagation();});
+      inp.addEventListener('mousedown',function(e){e.stopPropagation();});
+    });
+  }
+  // Code preview
+  var cpre=document.createElement('div');cpre.className='bcode';
+  body.appendChild(cpre);
+  el.appendChild(body);
+
+  // Container zone
+  if(block.isContainer){
+    var clabel=document.createElement('div');
+    clabel.className='container-label';
+    clabel.textContent='⊞ glissez des blocs ici';
+    el.appendChild(clabel);
+    var zone=document.createElement('div');
+    zone.className='block-children';
+    zone.dataset.parentId=block.id;
+    rebuildChildZone(zone,block);
+    el.appendChild(zone);
+    zone.addEventListener('dragover',function(e){e.preventDefault();e.stopPropagation();zone.classList.add('drop-target');});
+    zone.addEventListener('dragleave',function(){zone.classList.remove('drop-target');});
+    zone.addEventListener('drop',function(e){
+      e.preventDefault();e.stopPropagation();zone.classList.remove('drop-target');
+      if(!S.sidebarDrag)return;
+      var bd=S.sidebarDrag.blockDef;
+      if(bd.isContainer){toast('Pas de conteneur dans un conteneur','error');return;}
+      if(!block.children)block.children=[];
+      var cf={};(bd.fields||[]).forEach(function(fd){cf[fd.id]=fd.d;});
+      block.children.push({id:'ch_'+(S.nextBlockId++),name:bd.name,tpl:bd.tpl,fieldDefs:bd.fields||[],fields:cf,color:BLOCKS[S.sidebarDrag.catKey]?BLOCKS[S.sidebarDrag.catKey].color:'#8892a4'});
+      rebuildChildZone(zone,block);
+      updateBlockCode(el,block);renderCode();
+      toast('"'+bd.name+'" ajouté','success');
+    });
+  }
+
+  updateBlockCode(el,block);
+
+  // Actions
+  hdr.querySelectorAll('[data-action]').forEach(function(btn){
+    btn.addEventListener('click',function(e){
+      e.stopPropagation();
+      if(btn.dataset.action==='del')deleteBlock(block.id);
+      if(btn.dataset.action==='dup')dupBlock(block.id);
+    });
+  });
+
+  // Select
+  el.addEventListener('click',function(e){
+    if(e.target.tagName==='INPUT'||e.target.tagName==='BUTTON')return;
+    selectBlock(block.id,el);
+  });
+
+  // Drag to move (only when not panning)
+  el.addEventListener('mousedown',function(e){
+    if(e.button!==0)return;
+    if(e.target.tagName==='INPUT'||e.target.tagName==='BUTTON')return;
+    startBlockDrag(e,block,el);
+  });
+
+  return el;
+}
+
+// ============================================================
+// CHILD BLOCKS
+// ============================================================
+function rebuildChildZone(zone,parentBlock){
+  zone.innerHTML='';
+  (parentBlock.children||[]).forEach(function(ch,ci){
+    zone.appendChild(makeChildEl(parentBlock,ch,ci,zone));
+  });
+}
+function makeChildEl(parentBlock,ch,ci,zone){
+  var el=document.createElement('div');el.className='child-block';
+  var hdr=document.createElement('div');hdr.className='child-block-header';
+  hdr.innerHTML='<div class="child-dot" style="background:'+escH(ch.color||'#8892a4')+'"></div>'
+    +'<span class="child-name">'+escH(ch.name)+'</span>'
+    +'<div class="child-actions">'
+    +'<button class="child-btn eject" title="Éjecter vers le canvas">↑</button>'
+    +'<button class="child-btn rem" title="Supprimer">✕</button>'
+    +'</div>';
+  el.appendChild(hdr);
+  if(ch.fieldDefs&&ch.fieldDefs.length){
+    var flds=document.createElement('div');flds.className='child-fields';
+    ch.fieldDefs.forEach(function(fd){
+      var row=document.createElement('div');row.className='child-field';
+      var val=ch.fields&&ch.fields[fd.id]!==undefined?ch.fields[fd.id]:fd.d;
+      row.innerHTML='<label>'+escH(fd.l)+'</label><input type="text" data-field="'+fd.id+'" value="'+escH(val)+'" placeholder="'+escH(fd.d)+'"/>';
+      flds.appendChild(row);
+    });
+    el.appendChild(flds);
+    flds.querySelectorAll('input').forEach(function(inp){
+      inp.addEventListener('input',function(){
+        ch.fields[inp.dataset.field]=inp.value;
+        updateChildCode(el,ch);
+        var parentEl=worldEl.querySelector('.canvas-block[data-bid="'+parentBlock.id+'"]');
+        if(parentEl)updateBlockCode(parentEl,parentBlock);
+        renderCode();
+      });
+      inp.addEventListener('click',function(e){e.stopPropagation();});
+      inp.addEventListener('mousedown',function(e){e.stopPropagation();});
+    });
+  }
+  var cpre=document.createElement('div');cpre.className='child-code';
+  el.appendChild(cpre);
+  updateChildCode(el,ch);
+  hdr.querySelector('.child-btn.eject').addEventListener('click',function(e){
+    e.stopPropagation();ejectChild(parentBlock,ci,zone);
+  });
+  hdr.querySelector('.child-btn.rem').addEventListener('click',function(e){
+    e.stopPropagation();
+    parentBlock.children.splice(ci,1);
+    rebuildChildZone(zone,parentBlock);
+    var parentEl=worldEl.querySelector('.canvas-block[data-bid="'+parentBlock.id+'"]');
+    if(parentEl)updateBlockCode(parentEl,parentBlock);
+    renderCode();
+  });
+  return el;
+}
+function updateChildCode(childEl,ch){
+  var cpre=childEl.querySelector('.child-code');
+  if(cpre)var _hl3=getHighlighter(getTab()?getTab().name:'main.c');cpre.innerHTML=_hl3(renderTpl(ch.tpl,ch.fieldDefs,ch.fields));
+}
+function ejectChild(parentBlock,ci,zone){
+  var tab=getTab();
+  var ch=parentBlock.children[ci];if(!ch)return;
+  parentBlock.children.splice(ci,1);
+  // Place ejected block below the entire stack
+  var ordered=getOrderedBlocks();
+  var lastB=ordered.length?ordered[ordered.length-1]:parentBlock;
+  var lastEl=worldEl.querySelector('.canvas-block[data-bid="'+lastB.id+'"]');
+  var lastH=lastEl?lastEl.offsetHeight:120;
+  var px=parentBlock.x, py=lastB.y+lastH+BLOCK_GAP;
+  var catKey=null,bd=null;
+  Object.entries(BLOCKS).forEach(function(kv){
+    var found=kv[1].blocks.find(function(b){return b.name===ch.name||b.id===ch.blockDefId;});
+    if(found){catKey=kv[0];bd=found;}
+  });
+  var newBlock;
+  if(bd){
+    newBlock={id:'b_'+(S.nextBlockId++),blockDefId:bd.id,name:bd.name,catKey:catKey,isContainer:false,tpl:bd.tpl,tplClose:'',fieldDefs:bd.fields||[],fields:Object.assign({},ch.fields),children:[],x:px,y:py};
+  } else {
+    newBlock={id:'b_'+(S.nextBlockId++),blockDefId:'ejected',name:ch.name,catKey:'operators',isContainer:false,tpl:ch.tpl,tplClose:'',fieldDefs:ch.fieldDefs||[],fields:Object.assign({},ch.fields),children:[],x:px,y:py};
+  }
+  tab.blocks.push(newBlock);
+  rebuildChildZone(zone,parentBlock);
+  var parentEl=worldEl.querySelector('.canvas-block[data-bid="'+parentBlock.id+'"]');
+  if(parentEl)updateBlockCode(parentEl,parentBlock);
+  renderCanvas();renderCode();
+  toast('"'+ch.name+'" éjecté','success');
+}
+function updateBlockCode(el,block){
+  var cpre=el.querySelector(':scope > .bbody > .bcode');
+  if(cpre)var _hl2=getHighlighter(getTab()?getTab().name:'main.c');cpre.innerHTML=_hl2(genBlockCode(block));
+}
+
+// ============================================================
+// BLOCK DRAG — déplace le bloc + tous les blocs en dessous
+// ============================================================
+function startBlockDrag(e,block,el){
+  e.preventDefault();e.stopPropagation();
+  selectBlock(block.id,el);
+  var w=screenToWorld(e.clientX,e.clientY);
+
+  // Find all followers = blocks with Y > this block's Y, sorted by Y
+  var tab=getTab();
+  var curY=block.y; // snapshot current Y before any move
+  var followers=tab.blocks
+    .filter(function(b){ return b.id!==block.id && b.y>curY; })
+    .sort(function(a,b){ return a.y-b.y; })
+    .map(function(b){
+      var bEl=worldEl.querySelector('.canvas-block[data-bid="'+b.id+'"]');
+      return {block:b, el:bEl, origX:b.x, origY:b.y}; // snapshot at drag START
+    });
+
+  S.blockDrag={
+    block:block, el:el,
+    origX:block.x, origY:curY,   // snapshot
+    offsetX:w.x-block.x, offsetY:w.y-block.y,
+    followers:followers,
+    snapTarget:null
+  };
+  el.classList.add('dragging');
+  el.style.zIndex=100;
+  // Mark followers visually
+  followers.forEach(function(f){ if(f.el){ f.el.classList.add('dragging'); f.el.style.zIndex=99; } });
+}
+
+function onBlockDragMove(e){
+  var d=S.blockDrag;if(!d)return;
+  var w=screenToWorld(e.clientX,e.clientY);
+  var nx=w.x-d.offsetX;
+  var ny=w.y-d.offsetY;
+  var dY=ny-d.origY;  // vertical delta
+  var dX=nx-d.origX;  // horizontal delta (only for dragged block)
+
+  // Check snap (only for the block itself, ignoring followers)
+  var snap=findSnap(d.block,nx,ny);
+  if(snap){
+    d.snapTarget=snap;
+    showSnapGuide(snap.snapY, snap.targetBlock);
+  } else {
+    d.snapTarget=null;
+    hideSnapGuide();
+  }
+
+  // Move dragged block
+  d.block.x=nx; d.block.y=ny;
+  d.el.style.left=nx+'px'; d.el.style.top=ny+'px';
+
+  // Move all followers by the same dX and dY
+  d.followers.forEach(function(f){
+    var fx=f.origX+dX;
+    var fy=f.origY+dY;
+    f.block.x=fx; f.block.y=fy;
+    if(f.el){ f.el.style.left=fx+'px'; f.el.style.top=fy+'px'; }
+  });
+}
+
+function onBlockDragEnd(e){
+  var d=S.blockDrag;if(!d)return;
+
+  // Cleanup dragging class
+  d.el.classList.remove('dragging'); d.el.style.zIndex='';
+  d.followers.forEach(function(f){ if(f.el){ f.el.classList.remove('dragging'); f.el.style.zIndex=''; } });
+  hideSnapGuide();
+
+  // Apply snap to dragged block (followers adjust accordingly)
+  if(d.snapTarget){
+    var snapDY=d.snapTarget.snapY-d.block.y;
+    d.block.x=d.snapTarget.snapX;
+    d.block.y=d.snapTarget.snapY;
+    d.el.classList.add('snapping');
+    d.el.style.left=d.block.x+'px';
+    d.el.style.top=d.block.y+'px';
+    // Apply same snap delta to followers
+    d.followers.forEach(function(f){
+      f.block.y+=snapDY;
+      if(f.el){ f.el.classList.add('snapping'); f.el.style.top=f.block.y+'px'; }
+      setTimeout(function(){ if(f.el)f.el.classList.remove('snapping'); },200);
+    });
+    setTimeout(function(){ d.el.classList.remove('snapping'); },200);
+  }
+
+  // Commit final positions — origY no longer needed but clear state
+  S.blockDrag=null;
+  renderCanvas();
+  renderCode();
+}
+
+// ============================================================
+// BLOCK OPERATIONS
+// ============================================================
+function selectBlock(id,el){
+  worldEl.querySelectorAll('.canvas-block.selected').forEach(function(b){b.classList.remove('selected');});
+  S.selected=id;el.classList.add('selected');
+}
+function deleteBlock(id){
+  var tab=getTab();
+  tab.blocks=tab.blocks.filter(function(b){return b.id!==id;});
+  if(S.selected===id)S.selected=null;
+  renderCanvas();renderCode();
+}
+function dupBlock(id){
+  var tab=getTab();
+  var orig=tab.blocks.find(function(b){return b.id===id;});if(!orig)return;
+  var copy=JSON.parse(JSON.stringify(orig));
+  copy.id='b_'+(S.nextBlockId++);
+  copy.x+=30;copy.y+=30;
+  (copy.children||[]).forEach(function(ch){ch.id='ch_'+(S.nextBlockId++);});
+  tab.blocks.push(copy);
+  renderCanvas();renderCode();toast('Bloc dupliqué','success');
+}
+function addBlock(bd,catKey,wx,wy){
+  var tab=getTab();
+  var fields={};(bd.fields||[]).forEach(function(fd){fields[fd.id]=fd.d;});
+  var block={
+    id:'b_'+(S.nextBlockId++),blockDefId:bd.id,name:bd.name,catKey:catKey,
+    isContainer:!!bd.isContainer,tpl:bd.tpl,tplClose:bd.tplClose||'}',
+    fieldDefs:bd.fields||[],fields:fields,children:[],
+    x:Math.max(0,wx),y:Math.max(0,wy)
+  };
+  tab.blocks.push(block);
+  canvasEmptyEl.classList.add('hidden');
+  // Auto-snap if near another block (before rendering)
+  var snap=findSnap(block,block.x,block.y);
+  if(snap){block.x=snap.snapX;block.y=snap.snapY;}
+  renderCanvas();   // single render pass
+  renderCode();
+  // Select the new block
+  var newEl=worldEl.querySelector('.canvas-block[data-bid="'+block.id+'"]');
+  if(newEl)selectBlock(block.id,newEl);
+  toast('"'+block.name+'" ajouté','success');
+}
+function clearCanvas(){
+  getTab().blocks=[];S.selected=null;
+  renderCanvas();renderCode();toast('Canvas vidé','success');
+}
+
+// ============================================================
+// CANVAS DROP (sidebar → canvas)
+// ============================================================
+canvasEl.addEventListener('dragover',function(e){
+  e.preventDefault();
+  canvasEl.style.outline='2px dashed rgba(74,158,255,0.3)';
+  canvasEl.style.outlineOffset='-4px';
+});
+canvasEl.addEventListener('dragleave',function(e){
+  if(!canvasEl.contains(e.relatedTarget)){
+    canvasEl.style.outline='';
+  }
+});
+canvasEl.addEventListener('drop',function(e){
+  e.preventDefault();
+  canvasEl.style.outline='';
+  if(!S.sidebarDrag)return;
+  var w=screenToWorld(e.clientX,e.clientY);
+  addBlock(S.sidebarDrag.blockDef,S.sidebarDrag.catKey,w.x-140,w.y-30);
+  S.sidebarDrag=null;
+});
+
+// Deselect on canvas background click
+canvasEl.addEventListener('click',function(e){
+  if(e.target===canvasEl||e.target===worldEl){
+    worldEl.querySelectorAll('.canvas-block.selected').forEach(function(b){b.classList.remove('selected');});
+    S.selected=null;
+  }
+});
+
+// ============================================================
+// SIDEBAR
+// ============================================================
+function renderSidebar(filter){
+  sidebarContentEl.innerHTML='';
+  var fl=(filter||'').toLowerCase();
+  Object.entries(BLOCKS).forEach(function(kv){
+    var catKey=kv[0],cat=kv[1];
+    var visible=fl?cat.blocks.filter(function(b){return b.name.toLowerCase().includes(fl)||b.preview.toLowerCase().includes(fl);}):cat.blocks;
+    if(!visible.length)return;
+    var catEl=document.createElement('div');catEl.className='category';
+    var hdr=document.createElement('div');hdr.className='cat-header';
+    hdr.innerHTML='<div class="cat-icon" style="background:'+cat.color+'22;color:'+cat.color+';border:1px solid '+cat.color+'44">'+escH(cat.icon)+'</div>'
+      +'<span class="cat-label">'+escH(cat.label)+'</span>'
+      +'<span class="cat-count">'+visible.length+'</span>'
+      +'<span class="cat-chev">▾</span>';
+    hdr.addEventListener('click',function(){catEl.classList.toggle('collapsed');});
+    var blocksEl=document.createElement('div');blocksEl.className='category-blocks';
+    visible.forEach(function(bd){
+      var item=document.createElement('div');
+      item.className='block-item'+(bd.isContainer?' is-container':'');
+      item.dataset.bid=bd.id;
+      item.innerHTML='<style>.block-item[data-bid="'+bd.id+'"]::before{background:'+cat.color+'}</style>'
+        +'<span class="bin">'+escH(bd.name)+'</span>'
+        +'<span class="bip">'+escH(bd.preview)+'</span>';
+      item.setAttribute('draggable','true');
+      item.title=(bd.isContainer?'⊞ Conteneur\n':'')+bd.preview;
+      item.addEventListener('dragstart',function(e){
+        S.sidebarDrag={blockDef:bd,catKey:catKey};
+        e.dataTransfer.effectAllowed='copy';
+        dragGhostEl.innerHTML='<div style="background:var(--bg-block);border:1px solid '+cat.color+'55;border-radius:8px;padding:8px 12px;font-family:\'JetBrains Mono\',monospace;font-size:11px;color:var(--text-primary)">'+escH(bd.name)+'</div>';
+        dragGhostEl.style.display='block';
+        e.dataTransfer.setDragImage(dragGhostEl,0,0);
+        setTimeout(function(){dragGhostEl.style.display='none';},0);
+      });
+      item.addEventListener('dragend',function(){S.sidebarDrag=null;});
+      item.addEventListener('dblclick',function(){
+        // Add near bottom of existing stack or at center
+        var tab=getTab();
+        var ordered=getOrderedBlocks();
+        var wx,wy;
+        if(ordered.length){
+          var last=ordered[ordered.length-1];
+          var lastEl=worldEl.querySelector('.canvas-block[data-bid="'+last.id+'"]');
+          var lh=lastEl?lastEl.offsetHeight:BLOCK_H_APPROX;
+          wx=last.x; wy=last.y+lh+BLOCK_GAP;
+        } else {
+          // Place at visible center of canvas
+          var cr=canvasEl.getBoundingClientRect();
+          var cw=screenToWorld(cr.left+cr.width/2, cr.top+cr.height/3);
+          wx=cw.x-140; wy=cw.y;
+        }
+        addBlock(bd,catKey,wx,wy);
+      });
+      blocksEl.appendChild(item);
+    });
+    catEl.appendChild(hdr);catEl.appendChild(blocksEl);
+    sidebarContentEl.appendChild(catEl);
+  });
+}
+searchInputEl.addEventListener('input',function(e){renderSidebar(e.target.value);});
+
+// ============================================================
+// TABS
+// ============================================================
+function renderTabs(){
+  tabsBarEl.innerHTML='';
+  S.tabs.forEach(function(tab){
+    var el=document.createElement('div');
+    el.className='tab'+(tab.id===S.activeTab?' active':'');
+    el.innerHTML='<span>'+escH(tab.name)+'</span>'+(S.tabs.length>1?'<span class="tab-x" data-close="'+tab.id+'">✕</span>':'');
+    el.addEventListener('click',function(e){
+      if(e.target.dataset.close){closeTab(e.target.dataset.close);return;}
+      switchTab(tab.id);
+    });
+    tabsBarEl.appendChild(el);
+  });
+  var add=document.createElement('button');add.className='tab-add';add.textContent='+';add.title='Nouveau fichier';
+  add.addEventListener('click',function(){
+    var id='tab_'+S.nextTabId++;
+    S.tabs.push({id:id,name:'file_'+S.tabs.length+'.c',blocks:[]});
+    switchTab(id);
+  });
+  tabsBarEl.appendChild(add);
+}
+function switchTab(id){S.activeTab=id;S.selected=null;renderTabs();renderCanvas();renderCode();}
+function closeTab(id){
+  if(S.tabs.length<=1)return;
+  var idx=S.tabs.findIndex(function(t){return t.id===id;});
+  S.tabs.splice(idx,1);
+  if(S.activeTab===id)S.activeTab=S.tabs[Math.max(0,idx-1)].id;
+  renderTabs();renderCanvas();renderCode();
+}
+
+// ============================================================
+// EXAMPLE
+// ============================================================
+function loadExample_engine_unused() {
+  var tab=getTab();tab.blocks=[];
+  var Y=20;
+  function makeBlock(ck,id,fields,extraChildren){
+    var cat=BLOCKS[ck];if(!cat)return null;
+    var bd=cat.blocks.find(function(b){return b.id===id;});if(!bd)return null;
+    var f={};(bd.fields||[]).forEach(function(fd){f[fd.id]=fd.d;});
+    Object.assign(f,fields||{});
+    return {
+      id:'b_'+(S.nextBlockId++),blockDefId:bd.id,name:bd.name,catKey:ck,
+      isContainer:!!bd.isContainer,tpl:bd.tpl,tplClose:bd.tplClose||'}',
+      fieldDefs:bd.fields||[],fields:f,
+      children:(extraChildren||[]).map(function(ch){return Object.assign({id:'ch_'+(S.nextBlockId++)},ch);}),
+      x:60,y:Y
+    };
+  }
+  var ch=function(name,tpl,fieldDefs,fields,color){
+    return {name:name,tpl:tpl,fieldDefs:fieldDefs||[],fields:fields||{},color:color||'#8892a4'};
+  };
+
+  var blocks=[
+    makeBlock('preprocessor','pragma_once',{}),
+    makeBlock('preprocessor','inc_sys',{h:'stdio.h'}),
+    makeBlock('preprocessor','inc_sys',{h:'stdlib.h'}),
+    makeBlock('preprocessor','def_const',{name:'MAX',val:'100'}),
+    makeBlock('structs','typedef_struct',{name:'Point',t1:'float',f1:'x',t2:'float',f2:'y'}),
+    makeBlock('control','func_body',{ret:'float',name:'add',params:'float a, float b'},[
+      ch('return','return {val};',[{id:'val',l:'Valeur',d:'0'}],{val:'a + b'},'#f59e0b'),
+    ]),
+    makeBlock('control','func_main',{},[
+      ch('float','float {name} = {val}f;',[{id:'name',l:'Nom',d:'a'},{id:'val',l:'Valeur',d:'0.0'}],{name:'a',val:'3.0'},'#4a9eff'),
+      ch('float','float {name} = {val}f;',[{id:'name',l:'Nom',d:'b'},{id:'val',l:'Valeur',d:'0.0'}],{name:'b',val:'2.0'},'#4a9eff'),
+      ch('printf','printf("{fmt}\\n", {var});',[{id:'fmt',l:'Format',d:'%f'},{id:'var',l:'Var',d:'x'}],{fmt:'Résultat: %.2f',var:'add(a, b)'},'#84cc16'),
+    ]),
+  ];
+
+  // Stack blocks vertically with proper spacing
+  blocks.forEach(function(b,i){
+    if(!b)return;
+    // Set Y after previous block height estimate
+    if(i>0){
+      var prev=blocks[i-1];if(!prev)return;
+      var childCount=(prev.children||[]).length;
+      var estimatedH=80+(prev.fieldDefs&&prev.fieldDefs.length?prev.fieldDefs.length*22:0)+(childCount*55)+(prev.isContainer?30:0);
+      b.y=prev.y+estimatedH+BLOCK_GAP;
+    }
+    tab.blocks.push(b);
+  });
+
+  renderTabs();renderCanvas();renderCode();toast('Exemple chargé !','success');
+}
+
+// ============================================================
+// COPY / DOWNLOAD
+// ============================================================
+function copyCode(){
+  var code=buildCodeText();
+  if(!code){toast('Aucun code','error');return;}
+  navigator.clipboard.writeText(code).then(function(){toast('Code copié !','success');}).catch(function(){toast('Erreur copie','error');});
+}
+
+// ============================================================
+// RESIZER
+// ============================================================
+function makeResizer(rEl,getL,getR,minL,minR){
+  var drag=false;
+  rEl.addEventListener('mousedown',function(){drag=true;document.body.style.cursor='col-resize';document.body.style.userSelect='none';});
+  document.addEventListener('mousemove',function(e){
+    if(!drag)return;
+    var lEl=getL(),rEl2=getR();
+    var lW=lEl.offsetWidth+e.movementX,rW=rEl2.offsetWidth-e.movementX;
+    if(lW>=minL&&rW>=minR){lEl.style.width=lW+'px';lEl.style.flex='none';rEl2.style.width=rW+'px';rEl2.style.flex='none';}
+  });
+  document.addEventListener('mouseup',function(){drag=false;document.body.style.cursor='';document.body.style.userSelect='';});
+}
+makeResizer(document.getElementById('resizer-left'),
+  function(){return document.getElementById('sidebar');},
+  function(){return document.getElementById('canvas-wrap');},180,300);
+makeResizer(document.getElementById('resizer-right'),
+  function(){return document.getElementById('canvas-wrap');},
+  function(){return document.getElementById('code-panel');},300,220);
+
+// ============================================================
+// BUTTONS
+// ============================================================
+document.getElementById('btn-clear').addEventListener('click',clearCanvas);
+document.getElementById('btn-copy').addEventListener('click',copyCode);
+document.getElementById('btn-copy-footer').addEventListener('click',copyCode);
+document.getElementById('btn-example').addEventListener('click',loadExample);
+document.getElementById('btn-download').addEventListener('click',function(){
+  var code=buildCodeText();
+  if(!code){toast('Aucun code','error');return;}
+  var blob=new Blob([code],{type:'text/plain'});
+  var url=URL.createObjectURL(blob);
+  var a=document.createElement('a');a.href=url;
+  a.download=codeFilenameEl.textContent||'main.c';
+  a.click();URL.revokeObjectURL(url);
+  toast('Téléchargé !','success');
+});
+
+
+
+// FILE TREE
+// ============================================================
+var FS = {
+  files: [
+    {id:'tab_1', name:'main.c', type:'c'},
+  ],
+  nextFileId: 2,
+};
+
+function getFileType(name) {
+  if(name==='Makefile'||name.endsWith('.mk')) return 'mk';
+  if(name.endsWith('.h')) return 'h';
+  return 'c';
+}
+
+function fileIcon(type) {
+  if(type==='h')  return '<span style="color:var(--c-structs);font-weight:700;font-size:10px">H</span>';
+  if(type==='mk') return '<span style="color:var(--c-io);font-weight:700;font-size:10px">M</span>';
+  return '<span style="color:var(--c-types);font-weight:700;font-size:10px">C</span>';
+}
+
+function renderFileTree() {
+  var listEl = document.getElementById('filetree-list');
+  listEl.innerHTML = '';
+  FS.files.forEach(function(file) {
+    var item = document.createElement('div');
+    item.className = 'ft-item' + (file.id === S.activeTab ? ' active' : '');
+    item.dataset.fid = file.id;
+    item.innerHTML =
+      '<span class="ft-icon">' + fileIcon(file.type) + '</span>' +
+      '<span class="ft-name" data-fid="' + file.id + '">' + escH(file.name) + '</span>' +
+      '<div class="ft-actions">' +
+        '<button class="ft-action" data-rename="' + file.id + '" title="Renommer">✏</button>' +
+        (FS.files.length > 1 ? '<button class="ft-action del" data-del="' + file.id + '" title="Supprimer">✕</button>' : '') +
+      '</div>';
+    item.addEventListener('click', function(e) {
+      if(e.target.dataset.rename) { startRename(file, item); return; }
+      if(e.target.dataset.del)    { deleteFile(file.id); return; }
+      switchTab(file.id);
+    });
+    listEl.appendChild(item);
+  });
+}
+
+function startRename(file, item) {
+  var nameEl = item.querySelector('.ft-name');
+  var inp = document.createElement('input');
+  inp.className = 'ft-rename-input';
+  inp.value = file.name;
+  nameEl.replaceWith(inp);
+  inp.focus(); inp.select();
+  function commit() {
+    var newName = inp.value.trim() || file.name;
+    file.name = newName;
+    file.type = getFileType(newName);
+    // Also update tab name
+    var tab = S.tabs.find(function(t){return t.id===file.id;});
+    if(tab) tab.name = newName;
+    renderFileTree();
+    renderTabs();
+    renderSidebar();
+  }
+  inp.addEventListener('blur', commit);
+  inp.addEventListener('keydown', function(e){
+    if(e.key==='Enter') commit();
+    if(e.key==='Escape'){ file.name=file.name; renderFileTree(); }
+  });
+}
+
+function createFile(type) {
+  var ext = type==='h' ? '.h' : type==='mk' ? 'Makefile' : '.c';
+  var baseName = type==='mk' ? 'Makefile' : 'nouveau' + ext;
+  // Make unique
+  var existing = FS.files.map(function(f){return f.name;});
+  if(type !== 'mk') {
+    var i = 1;
+    while(existing.indexOf(baseName) >= 0) {
+      baseName = 'nouveau_' + (i++) + ext;
+    }
+  }
+  var id = 'tab_' + S.nextTabId++;
+  var file = {id:id, name:baseName, type:type};
+  FS.files.push(file);
+  S.tabs.push({id:id, name:baseName, blocks:[]});
+  switchTab(id);
+  renderFileTree();
+  // Immediately open rename
+  var item = document.querySelector('.ft-item[data-fid="'+id+'"]');
+  if(item) startRename(file, item);
+}
+
+function deleteFile(id) {
+  if(FS.files.length <= 1) { toast('Impossible de supprimer le dernier fichier','error'); return; }
+  FS.files = FS.files.filter(function(f){return f.id!==id;});
+  closeTab(id);
+  renderFileTree();
+}
+
+// Sync FS when tabs change
+var _origCloseTab = closeTab;
+closeTab = function(id) {
+  _origCloseTab(id);
+  FS.files = FS.files.filter(function(f){return f.id!==id;});
+  // If we closed active, file tree needs update
+  renderFileTree();
+};
+
+// File tree buttons
+document.getElementById('ft-new-c').addEventListener('click', function(){ createFile('c'); });
+document.getElementById('ft-new-h').addEventListener('click', function(){ createFile('h'); });
+document.getElementById('ft-new-mk').addEventListener('click', function(){ createFile('mk'); });
+
+// Filetree resizer
+(function(){
+  var drag=false;
+  var rEl=document.getElementById('resizer-ft');
+  rEl.addEventListener('mousedown',function(){drag=true;document.body.style.cursor='col-resize';document.body.style.userSelect='none';});
+  document.addEventListener('mousemove',function(e){
+    if(!drag)return;
+    var ftEl=document.getElementById('filetree');
+    var w=ftEl.offsetWidth+e.movementX;
+    if(w>=120&&w<=400){ftEl.style.width=w+'px';ftEl.style.flex='none';}
+  });
+  document.addEventListener('mouseup',function(){drag=false;document.body.style.cursor='';document.body.style.userSelect='';});
+})();
+
+// ============================================================
+// CONTEXT-AWARE SIDEBAR (H / Makefile / C)
+// ============================================================
+var _origRenderSidebar = renderSidebar;
+renderSidebar = function(filter) {
+  var tab = getTab();
+  var fileType = 'c';
+  if(tab) {
+    var file = FS.files.find(function(f){return f.id===tab.id;});
+    if(file) fileType = file.type;
+  }
+
+  sidebarContentEl.innerHTML = '';
+  var fl = (filter||'').toLowerCase();
+
+  var blockSets = [getBlocksForFile(tab ? tab.name : 'main.c')];
+
+  blockSets.forEach(function(bset) {
+    Object.entries(bset).forEach(function(kv) {
+      var catKey=kv[0], cat=kv[1];
+      var visible=fl ? cat.blocks.filter(function(b){return b.name.toLowerCase().includes(fl)||b.preview.toLowerCase().includes(fl);}) : cat.blocks;
+      if(!visible.length) return;
+      var catEl=document.createElement('div'); catEl.className='category';
+      var hdr=document.createElement('div'); hdr.className='cat-header';
+      hdr.innerHTML='<div class="cat-icon" style="background:'+cat.color+'22;color:'+cat.color+';border:1px solid '+cat.color+'44">'+escH(cat.icon)+'</div>'
+        +'<span class="cat-label">'+escH(cat.label)+'</span>'
+        +'<span class="cat-count">'+visible.length+'</span>'
+        +'<span class="cat-chev">▾</span>';
+      hdr.addEventListener('click',function(){catEl.classList.toggle('collapsed');});
+      var blocksEl=document.createElement('div'); blocksEl.className='category-blocks';
+      visible.forEach(function(bd){
+        var item=document.createElement('div');
+        item.className='block-item'+(bd.isContainer?' is-container':'');
+        item.dataset.bid=bd.id;
+        item.innerHTML='<style>.block-item[data-bid="'+bd.id+'"]::before{background:'+cat.color+'}</style>'
+          +'<span class="bin">'+escH(bd.name)+'</span>'
+          +'<span class="bip">'+escH(bd.preview)+'</span>';
+        item.setAttribute('draggable','true');
+        item.title=bd.preview;
+        item.addEventListener('dragstart',function(e){
+          S.sidebarDrag={blockDef:bd,catKey:catKey};
+          e.dataTransfer.effectAllowed='copy';
+          dragGhostEl.innerHTML='<div style="background:var(--bg-block);border:1px solid '+cat.color+'55;border-radius:8px;padding:8px 12px;font-family:\'JetBrains Mono\',monospace;font-size:11px;color:var(--text-primary)">'+escH(bd.name)+'</div>';
+          dragGhostEl.style.display='block';
+          e.dataTransfer.setDragImage(dragGhostEl,0,0);
+          setTimeout(function(){dragGhostEl.style.display='none';},0);
+        });
+        item.addEventListener('dragend',function(){S.sidebarDrag=null;});
+        item.addEventListener('dblclick',function(){
+          var tab=getTab();
+          var ordered=getOrderedBlocks();
+          var wx,wy;
+          if(ordered.length){
+            var last=ordered[ordered.length-1];
+            var lastEl=worldEl.querySelector('.canvas-block[data-bid="'+last.id+'"]');
+            var lh=lastEl?lastEl.offsetHeight:BLOCK_H_APPROX;
+            wx=last.x; wy=last.y+lh+BLOCK_GAP;
+          } else {
+            var cr=canvasEl.getBoundingClientRect();
+            var cw=screenToWorld(cr.left+cr.width/2,cr.top+cr.height/3);
+            wx=cw.x-140; wy=cw.y;
+          }
+          addBlock(bd,catKey,wx,wy);
+        });
+        blocksEl.appendChild(item);
+      });
+      catEl.appendChild(hdr); catEl.appendChild(blocksEl);
+      sidebarContentEl.appendChild(catEl);
+    });
+  });
+};
+
+// ============================================================
+// INLINE ERROR VALIDATION
+// ============================================================
+function validateBlock(block) {
+  var code = genBlockCode(block);
+  var errors = [];
+  var warnings = [];
+
+  // 1. Unresolved placeholders
+  var unresolved = code.match(/\{[a-zA-Z_]\w*\}/g);
+  if(unresolved) {
+    var unique = unresolved.filter(function(v,i,a){return a.indexOf(v)===i;});
+    errors.push('Champ(s) non rempli(s): ' + unique.join(', '));
+  }
+
+  // 2. Unbalanced braces (for non-containers)
+  if(!block.isContainer) {
+    var opens = (code.match(/\{/g)||[]).length;
+    var closes = (code.match(/\}/g)||[]).length;
+    if(opens !== closes) warnings.push('Accolades déséquilibrées');
+  }
+
+  // 3. Missing semicolon on simple statements (not containers, not preprocessor, not comments)
+  if(!block.isContainer && code.trim().length > 0) {
+    var trimmed = code.trim();
+    var isPreproc = trimmed.startsWith('#');
+    var isComment = trimmed.startsWith('//') || trimmed.startsWith('/*');
+    var isBlock = trimmed.endsWith('{') || trimmed.endsWith('}');
+    var hasSemi = trimmed.endsWith(';');
+    if(!isPreproc && !isComment && !isBlock && !hasSemi) {
+      // Only warn if it looks like a statement
+      if(trimmed.match(/^(int|float|double|char|void|long|short|unsigned|static|extern|const|volatile|return|break|continue|goto|free|memset|memcpy|printf|scanf)/)) {
+        warnings.push('Point-virgule manquant?');
+      }
+    }
+  }
+
+  // 4. Unbalanced parentheses
+  var pOpen = (code.match(/\(/g)||[]).length;
+  var pClose = (code.match(/\)/g)||[]).length;
+  if(pOpen !== pClose) warnings.push('Parenthèses déséquilibrées');
+
+  return {errors:errors, warnings:warnings};
+}
+
+function applyValidation(el, block) {
+  var result = validateBlock(block);
+  var badge = el.querySelector('.block-error-badge');
+  if(!badge) {
+    badge = document.createElement('div');
+    badge.className = 'block-error-badge';
+    el.appendChild(badge);
+  }
+  el.classList.remove('has-error','has-warning');
+  if(result.errors.length) {
+    el.classList.add('has-error');
+    badge.textContent = '⚠ ' + result.errors[0];
+    badge.title = result.errors.concat(result.warnings).join('\n');
+  } else if(result.warnings.length) {
+    el.classList.add('has-warning');
+    badge.textContent = '⚠ ' + result.warnings[0];
+    badge.title = result.warnings.join('\n');
+  }
+}
+
+// Hook validation into updateBlockCode
+var _origUpdateBlockCode = updateBlockCode;
+updateBlockCode = function(el, block) {
+  _origUpdateBlockCode(el, block);
+  applyValidation(el, block);
+};
+
+// ============================================================
+// JSON SAVE / LOAD
+// ============================================================
+function saveJSON() {
+  var data = {
+    version: 2,
+    files: FS.files,
+    tabs: S.tabs.map(function(tab){
+      return {
+        id: tab.id,
+        name: tab.name,
+        blocks: tab.blocks
+      };
+    }),
+    nextTabId: S.nextTabId,
+    nextBlockId: S.nextBlockId,
+  };
+  var json = JSON.stringify(data, null, 2);
+  var blob = new Blob([json], {type:'application/json'});
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url;
+  // Name based on project
+  var name = FS.files[0] ? FS.files[0].name.replace(/\.[^.]+$/, '') : 'projet';
+  a.download = name + '_cbuilder.json';
+  a.click();
+  URL.revokeObjectURL(url);
+  toast('Projet sauvegardé !', 'success');
+}
+
+function loadJSON(file) {
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      var data = JSON.parse(e.target.result);
+      if(!data.tabs || !data.version) throw new Error('Format invalide');
+
+      // Restore state
+      S.tabs = data.tabs;
+      S.nextTabId = data.nextTabId || (S.tabs.length + 1);
+      S.nextBlockId = data.nextBlockId || 100;
+      S.activeTab = S.tabs[0].id;
+      S.selected = null;
+
+      // Restore file tree
+      if(data.files) {
+        FS.files = data.files;
+      } else {
+        // Build from tabs
+        FS.files = S.tabs.map(function(t){
+          return {id:t.id, name:t.name, type:getFileType(t.name)};
+        });
+      }
+
+      renderFileTree();
+      renderTabs();
+      renderCanvas();
+      renderCode();
+      renderSidebar();
+      toast('Projet chargé : ' + S.tabs.length + ' fichier(s)', 'success');
+    } catch(err) {
+      toast('Erreur: ' + err.message, 'error');
+    }
+  };
+  reader.readAsText(file);
+}
+
+document.getElementById('btn-save-json').addEventListener('click', saveJSON);
+document.getElementById('btn-load-json').addEventListener('click', function(){
+  document.getElementById('input-load-json').click();
+});
+document.getElementById('input-load-json').addEventListener('change', function(e){
+  if(e.target.files[0]) loadJSON(e.target.files[0]);
+  e.target.value = '';
+});
+
+// ============================================================
+// PATCH switchTab to update file tree
+// ============================================================
+var _origSwitchTab = switchTab;
+switchTab = function(id) {
+  _origSwitchTab(id);
+  renderFileTree();
+  renderSidebar(); // context-aware
+};
+
+
+
+
+// ============================================================
+// BOOT
+// ============================================================
+// Stub missing globals from C plugin (not loaded here)
+if (typeof BLOCKS === 'undefined') var BLOCKS = CS_BLOCKS;
+if (typeof H_BLOCKS === 'undefined') var H_BLOCKS = { header: { label:"Header .h", color:"#a855f7", icon:"H", blocks:[] } };
+if (typeof MK_BLOCKS === 'undefined') var MK_BLOCKS = { makefile: { label:"Makefile", color:"#84cc16", icon:"MK", blocks:[] } };
+
+renderFileTree();
+renderSidebar();
+renderTabs();
+renderCanvas();
+renderCode();
+applyViewport();
+
+// C-Scratch example
+function loadExample() {
+  var tab = getTab();
+  tab.blocks = [];
+  var Y = 20;
+  function mb(ck, id, fields, children) {
+    var cat = CS_BLOCKS[ck]; if (!cat) return null;
+    var bd  = cat.blocks.find(function(b){ return b.id===id; }); if (!bd) return null;
+    var f={}; (bd.fields||[]).forEach(function(fd){ f[fd.id]=fd.d; });
+    Object.assign(f, fields||{});
+    return {
+      id:'b_'+(S.nextBlockId++), blockDefId:bd.id, name:bd.name, catKey:ck,
+      isContainer:!!bd.isContainer, tpl:bd.tpl, tplClose:bd.tplClose||'}',
+      fieldDefs:bd.fields||[], fields:f,
+      children:(children||[]).map(function(c){ return Object.assign({id:'ch_'+(S.nextBlockId++)},c); }),
+      x:60, y:Y
+    };
+  }
+  var blocks = [
+    mb('preprocessor','cs_inc_sys',{h:'stdio.h'}),
+    mb('preprocessor','cs_inc_sys',{h:'stdlib.h'}),
+    mb('preprocessor','cs_define',{name:'N',val:'5'}),
+    // SAFE: malloc + null check + free
+    mb('memory','cs_malloc',{type:'int',name:'arr',n:'N'}),
+    mb('memory','cs_null_check',{ptr:'arr'},[
+      {name:'return 1',tpl:'return {val};',fieldDefs:[{id:'val',l:'Val',d:'1'}],fields:{val:'1'},color:'#f59e0b'},
+    ]),
+    mb('control','cs_for',{type:'int',var:'i',start:'0',end:'N'},[
+      {name:'arr[i]=i',tpl:'{arr}[{idx}] = {val};',fieldDefs:[{id:'arr',l:'Arr',d:'arr'},{id:'idx',l:'i',d:'i'},{id:'val',l:'Val',d:'i*2'}],fields:{arr:'arr',idx:'i',val:'i*2'},color:'#f59e0b'},
+    ]),
+    mb('io','cs_printf_i',{fmt:'%d',var:'arr[0]'}),
+    mb('memory','cs_free',{name:'arr'}),
+    // LEAK: malloc sans free
+    mb('memory','cs_malloc',{type:'char',name:'buf',n:'64'}),
+    mb('io','cs_printf_s',{var:'"buf jamais libéré (fuite démo)"'}),
+    // main
+    mb('functions','cs_main',{},[
+      {name:'return 0',tpl:'return {val};',fieldDefs:[{id:'val',l:'Val',d:'0'}],fields:{val:'0'},color:'#f59e0b'},
+    ]),
+  ];
+  var prevBlock = null;
+  blocks.forEach(function(b) {
+    if (!b) return;
+    if (prevBlock) {
+      var lh = 80 + ((prevBlock.fieldDefs||[]).length*22) + ((prevBlock.children||[]).length*55) + (prevBlock.isContainer?30:0);
+      b.y = prevBlock.y + lh + 16;
+    }
+    prevBlock = b;
+    tab.blocks.push(b);
+  });
+  renderCanvas(); renderCode();
+  setTimeout(csRunAnalysis, 150);
+  toast('Exemple chargé — 1 fuite volontaire (buf)', 'warn');
+}
+</script>
+</body>
+</html>
